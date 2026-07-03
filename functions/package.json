@@ -1,0 +1,17 @@
+{
+  "name": "functions",
+  "engines": { "node": "20" },
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "serve": "firebase emulators:start --only functions",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "firebase-admin": "^12.1.1",
+    "firebase-functions": "^5.0.1",
+    "nodemailer": "^6.9.13"
+  }
+}

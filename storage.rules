@@ -1,0 +1,18 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isAdmin() {
+      return request.auth != null &&
+        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Course covers & downloadable resources: public read (covers show on
+    // the sales page; resource links are only ever shown to enrolled
+    // readers by the app, but the file itself is not secret once unlisted-
+    // linked). Only admins can upload.
+    match /courses/{courseId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+  }
+}

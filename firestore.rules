@@ -1,0 +1,47 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() { return request.auth != null; }
+    function isOwner(uid) { return isSignedIn() && request.auth.uid == uid; }
+    function isAdmin() {
+      return isSignedIn() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Anyone can read published courses (the public sales page + outline).
+    // Only admins can write — uploads go through the admin UI.
+    match /courses/{courseId} {
+      allow read: if resource.data.published == true || isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // Users can read/update their own profile. Only admins can change roles.
+    match /users/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow create: if isOwner(uid);
+      allow update: if isOwner(uid) && request.resource.data.role == resource.data.role;
+      allow update: if isAdmin();
+    }
+
+    // Enrollments are only ever written by Cloud Functions (admin SDK,
+    // which bypasses these rules). Readers can see their own.
+    match /enrollments/{id} sz{
+      allow read: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow write: if false;
+    } K
+
+    // Readers manage their own progress only.
+    match /progress/{id} {
+      allow read, write: if isSignedIn() && id.matches(request.auth.uid + '_.*');
+    }
+
+    // Orders are created client-side (pending) and finalized by Cloud
+    // Functions only.
+    match /orders/{reference} {
+      allow create: if true;
+      allow read: if isAdmin();
+      allow update, delete: if false;
+    }
+  }
+}
