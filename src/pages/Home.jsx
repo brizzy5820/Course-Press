@@ -2,14 +2,21 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { listCourses, flattenLessons } from '../lib/data'
 import { useAuth } from '../contexts/AuthContext'
+import { useToast } from '../contexts/ToastContext'
 
 export default function Home() {
   const [courses, setCourses] = useState(null)
-  const { user, logout } = useAuth()
+  const { user, logout }      = useAuth()
+  const toast                 = useToast()
 
   useEffect(() => {
     listCourses({ onlyPublished: true }).then(setCourses)
   }, [])
+
+  async function handleLogout() {
+    await logout()
+    toast('You\'ve been signed out.', 'info')
+  }
 
   return (
     <div className="min-h-screen bg-cream">
@@ -21,10 +28,14 @@ export default function Home() {
           {user ? (
             <div className="flex items-center gap-4 text-sm">
               <Link to="/dashboard" className="font-medium hover:text-goldDeep">My library</Link>
-              <button onClick={logout} className="text-ash hover:text-ink">Sign out</button>
+              <button onClick={handleLogout} className="text-ash hover:text-ink transition">
+                Sign out
+              </button>
             </div>
           ) : (
-            <Link to="/login" className="text-sm font-medium hover:text-goldDeep">Sign in</Link>
+            <Link to="/login" className="text-sm font-medium hover:text-goldDeep transition">
+              Sign in
+            </Link>
           )}
         </div>
       </header>
@@ -66,7 +77,10 @@ function CourseCard({ course }) {
     >
       <div className="aspect-[16/9] bg-parchment overflow-hidden">
         {course.coverImage ? (
-          <img src={course.coverImage} alt="" className="h-full w-full object-cover group-hover:scale-105 transition duration-500" />
+          <img
+            src={course.coverImage} alt=""
+            className="h-full w-full object-cover group-hover:scale-105 transition duration-500"
+          />
         ) : (
           <div className="h-full w-full flex items-center justify-center font-display text-3xl text-ash/40">
             {course.title?.[0] || '?'}

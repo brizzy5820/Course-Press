@@ -7,21 +7,28 @@ import CoursePlayer from './pages/CoursePlayer'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import CourseEditor from './pages/admin/CourseEditor'
 import { ProtectedRoute, AdminRoute } from './components/Guards'
+import { ToastProvider } from './contexts/ToastContext'
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/" element={<Home />} />
-      <Route path="/courses/:courseId" element={<CourseDetail />} />
-      <Route path="/login" element={<Login />} />
+    <ToastProvider>
+      <Routes>
+        <Route path="/"                    element={<Home />} />
+        <Route path="/courses/:courseId"   element={<CourseDetail />} />
+        <Route path="/login"               element={<Login />} />
 
-      <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-      <Route path="/dashboard/:courseId" element={<ProtectedRoute><CoursePlayer /></ProtectedRoute>} />
+        <Route path="/dashboard"
+          element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+        <Route path="/dashboard/:courseId"
+          element={<ProtectedRoute><CoursePlayer /></ProtectedRoute>} />
 
-      <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
-      <Route path="/admin/courses/:courseId" element={<AdminRoute><CourseEditor /></AdminRoute>} />
+        <Route path="/admin"
+          element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+        <Route path="/admin/courses/:courseId"
+          element={<AdminRoute><CourseEditor /></AdminRoute>} />
 
-      <Route path="*" element={<Home />} />
-    </Routes>
+        <Route path="*" element={<Home />} />
+      </Routes>
+    </ToastProvider>
   )
 }

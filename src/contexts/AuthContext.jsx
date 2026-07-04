@@ -1,61 +1,89 @@
-// src/contexts/AuthContext.jsx
-import { createContext, useContext, useEffect, useState } from 'react'
-import {
-  onAuthStateChanged, isSignInWithEmailLink, signInWithEmailLink, signOut,
-} from 'firebase/auth'
-import { auth } from '../firebase'
-import { ensureUserDoc, getUserProfile } from '../lib/data'
+import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { onAuthStateChanged, signOut as firebaseSignOut } from 'firebase/auth'
+import { doc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore'
+import { auth, db } from '../firebase'
 
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null)
+  const [user,    setUser]    = useState(null)
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Handle the "magic link" the access-email sends. Firebase requires the
-    // sign-in to happen on the same URL the link points to (see /auth/complete).
-    if (isSignInWithEmailLink(auth, window.location.href)) {
-      const params = new URLSearchParams(window.location.search)
-      const email = window.localStorage.getItem('coursepress_email') || params.get('email')
-      if (email) {
-        signInWithEmailLink(auth, email, window.location.href)
-          .then(() => window.localStorage.removeItem('coursepress_email'))
-          .catch(console.error)
-      }
-    }
+    let profileUnsub = () => {}
 
-    const unsub = onAuthStateChanged(auth, async (u) => {
-      setUser(u)
-      if (u) {
-        const p = await ensureUserDoc(u.uid, { name: u.displayName || '', email: u.email })
-        setProfile(p)
+    const authUnsub = onAuthStateChanged(auth, firebaseUser => {
+      // Clean up any previous profile listener immediately
+      profileUnsub()
+      setUser(firebaseUser)
+      setProfile(null)
+
+      if (firebaseUser) {
+        // Subscribe to the user's Firestore profile in real-time
+        profileUnsub = onSnapshot(
+          doc(db, 'users', firebaseUser.uid),
+          async snap => {
+            if (snap.exists()) {
+              setProfile({ uid: snap.id, ...snap.data() })
+            } else {
+              // Profile doc doesn't exist yet — create it.
+              // This covers the edge case where Auth account exists but
+              // Firestore write in CourseDetail failed or was interrupted.
+              await setDoc(
+                doc(db, 'users', firebaseUser.uid),
+                {
+                  name:      firebaseUser.displayName || '',
+                  email:     firebaseUser.email       || '',
+                  role:      'student',
+                  createdAt: serverTimestamp(),
+                },
+                { merge: true }
+              )
+              // The setDoc above will trigger another snapshot which will
+              // hit the snap.exists() branch and set the profile correctly.
+            }
+            setLoading(false)
+          },
+          () => {
+            // Snapshot error (e.g. permission denied during logout transition)
+            setLoading(false)
+          }
+        )
       } else {
-        setProfile(null)
+        // Signed out — clear everything
+        setLoading(false)
       }
-      setLoading(false)
     })
-    return unsub
+
+    return () => {
+      authUnsub()
+      profileUnsub()
+    }
   }, [])
 
-  async function refreshProfile() {
-    if (user) setProfile(await getUserProfile(user.uid))
+  const logout = async () => {
+    await firebaseSignOut(auth)
   }
 
-  async function logout() {
-    await signOut(auth)
-  }
-
-  const isAdmin = profile?.role === 'admin'
+  const value = useMemo(() => ({
+    user,
+    profile,
+    loading,
+    isAdmin: profile?.role === 'admin',
+    logout,
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [user, profile, loading])
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, isAdmin, refreshProfile, logout }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   )
 }
 
 export function useAuth() {
-  return useContext(AuthContext)
+  const ctx = useContext(AuthContext)
+  if (!ctx) throw new Error('useAuth must be used inside <AuthProvider>')
+  return ctx
 }

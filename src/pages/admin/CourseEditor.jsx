@@ -159,7 +159,10 @@ export default function CourseEditor() {
     <div className="min-h-screen bg-cream pb-24">
       <header className="border-b border-ink/10 sticky top-0 bg-cream/95 backdrop-blur z-10">
         <div className="max-w-3xl mx-auto px-6 py-4 flex items-center justify-between">
-          <Link to="/admin" className="text-sm text-ash hover:text-ink">← All courses</Link>
+          <Link to="/admin" className="inline-flex items-center gap-2 text-sm text-ash hover:text-ink">
+            <ArrowLeft className="h-4 w-4" />
+            All courses
+          </Link>
           <div className="flex items-center gap-3">
             {uploading && <span className="text-xs text-goldDeep">Uploading…</span>}
             {savedAt && !uploading && (

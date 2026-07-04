@@ -3,44 +3,49 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     function isSignedIn() { return request.auth != null; }
-    function isOwner(uid) { return isSignedIn() && request.auth.uid == uid; }
     function isAdmin() {
       return isSignedIn() &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
-    // Anyone can read published courses (the public sales page + outline).
-    // Only admins can write — uploads go through the admin UI.
+    // Published courses: public read. Admin: full access.
     match /courses/{courseId} {
-      allow read: if resource.data.published == true || isAdmin();
+      allow read:  if resource.data.published == true || isAdmin();
       allow write: if isAdmin();
     }
 
     // Users can read/update their own profile. Only admins can change roles.
     match /users/{uid} {
-      allow read: if isOwner(uid) || isAdmin();
-      allow create: if isOwner(uid);
-      allow update: if isOwner(uid) && request.resource.data.role == resource.data.role;
-      allow update: if isAdmin();
+      allow read:   if request.auth.uid == uid || isAdmin();
+      allow create: if request.auth.uid == uid;
+      allow update: if (request.auth.uid == uid &&
+                        request.resource.data.role == resource.data.role) || isAdmin();
     }
 
-    // Enrollments are only ever written by Cloud Functions (admin SDK,
-    // which bypasses these rules). Readers can see their own.
-    match /enrollments/{id} sz{
-      allow read: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
-      allow write: if false;
-    } K
+    // Enrollments are written by access.js on the client after auth.
+    // Readers can only see their own.
+    match /enrollments/{id} {
+      allow read:  if isSignedIn() && resource.data.uid == request.auth.uid || isAdmin();
+      allow write: if isSignedIn();
+    }
 
-    // Readers manage their own progress only.
+    // Pending enrollments (admin grants awaiting first sign-in).
+    // Admins create them. Signed-in users can read/delete their own by email.
+    match /pendingEnrollments/{id} {
+      allow create: if isAdmin();
+      allow read, delete: if isSignedIn() &&
+                             resource.data.email == request.auth.token.email;
+    }
+
+    // Progress is managed by the student only.
     match /progress/{id} {
       allow read, write: if isSignedIn() && id.matches(request.auth.uid + '_.*');
     }
 
-    // Orders are created client-side (pending) and finalized by Cloud
-    // Functions only.
+    // Orders: anyone can create (checkout). Only admins can read. Never editable by users.
     match /orders/{reference} {
       allow create: if true;
-      allow read: if isAdmin();
+      allow read:   if isAdmin();
       allow update, delete: if false;
     }
   }

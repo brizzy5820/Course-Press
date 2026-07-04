@@ -11,7 +11,8 @@ export function ProtectedRoute({ children }) {
 export function AdminRoute({ children }) {
   const { user, isAdmin, loading } = useAuth()
   if (loading) return <FullPageLoader />
-  if (!user ) return <Navigate to="/login" replace />
+  if (!user) return <Navigate to="/login" replace />
+  if (!isAdmin) return <Navigate to="/dashboard" replace />
   return children
 }
 

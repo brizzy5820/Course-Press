@@ -16,7 +16,7 @@ const firebaseConfig = {
 
 const ADMIN_EMAIL = 'boluwatifedavid@gmail.com'    // ← change this
 const ADMIN_NAME  = 'Egbeyemi Boluwatife david'               // ← change this
-const ADMIN_PASS  = 'Qwerty123'    // ← change this (min 6 chars)
+const ADMIN_PASS  = '08106146952'    // ← change this (min 6 chars)
 
 const app  = initializeApp(firebaseConfig)
 const auth = getAuth(app)

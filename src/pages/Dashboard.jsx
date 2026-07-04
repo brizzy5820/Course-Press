@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { ArrowRight } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { listMyEnrollments, getCourse, getProgress, flattenLessons } from '../lib/data'
 
@@ -38,7 +39,7 @@ export default function Dashboard() {
         {items === null && <p className="text-ash">Loading…</p>}
         {items?.length === 0 && (
           <div className="border border-dashed border-ink/15 rounded-xl p-10 text-center text-ash">
-            No courses yet. <Link to="/" className="text-goldDeep font-medium">Browse the catalog →</Link>
+            No courses yet. <Link to="/" className="inline-flex items-center gap-2 text-goldDeep font-medium">Browse the catalog <ArrowRight className="h-4 w-4" /></Link>
           </div>
         )}
 

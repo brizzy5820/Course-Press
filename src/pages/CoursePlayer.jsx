@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, Navigate, Link } from 'react-router-dom'
+import { ArrowLeft, CheckCircle2, ChevronRight, Download, Moon, Sun } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { getCourse, isEnrolled, getProgress, markLessonComplete, flattenLessons } from '../lib/data'
 import Sidebar from '../components/Sidebar'
@@ -60,7 +61,10 @@ export default function CoursePlayer() {
       <main className="flex-1 min-w-0">
         <div className={`min-h-screen ${activeLesson?.type === 'text' && readMode === 'dark' ? 'bg-spine text-cream' : 'bg-white'}`}>
           <div className="max-w-3xl mx-auto px-6 py-10 lg:py-14">
-            <Link to="/dashboard" className="text-xs font-mono text-ash hover:text-goldDeep">← My library</Link>
+            <Link to="/dashboard" className="inline-flex items-center gap-2 text-xs font-mono text-ash hover:text-goldDeep">
+              <ArrowLeft className="h-4 w-4" />
+              My library
+            </Link>
 
             <p className="font-mono text-xs uppercase tracking-[0.2em] text-goldDeep mt-4 mb-2">
               {activeLesson?.moduleTitle}
@@ -74,9 +78,10 @@ export default function CoursePlayer() {
                 <div className="flex justify-end mb-4">
                   <button
                     onClick={() => setReadMode(m => m === 'light' ? 'dark' : 'light')}
-                    className="text-xs font-mono px-3 py-1.5 rounded-full border border-ink/15"
+                    className="inline-flex items-center gap-2 text-xs font-mono rounded-full border border-ink/15 px-3 py-1.5"
                   >
-                    {readMode === 'light' ? '🌙 Dark mode' : '☀️ Light mode'}
+                    {readMode === 'light' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+                    {readMode === 'light' ? 'Dark mode' : 'Light mode'}
                   </button>
                 </div>
               )}
@@ -91,8 +96,9 @@ export default function CoursePlayer() {
                   <ul className="space-y-1">
                     {activeLesson.resources.map((r, i) => (
                       <li key={i}>
-                        <a href={r.url} target="_blank" rel="noreferrer" className="text-goldDeep hover:underline text-sm">
-                          ⬇ {r.label}
+                        <a href={r.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-goldDeep hover:underline text-sm">
+                          <Download className="h-4 w-4" />
+                          {r.label}
                         </a>
                       </li>
                     ))}
@@ -104,14 +110,14 @@ export default function CoursePlayer() {
             <div className="mt-12 flex items-center justify-between gap-4 border-t border-ink/10 pt-6">
               <button
                 onClick={toggleComplete}
-                className={`px-5 py-3 rounded-lg font-medium text-sm transition
-                  ${isDone ? 'bg-sage/15 text-sage' : 'bg-spine text-cream hover:bg-spineLight'}`}
+                className={`inline-flex items-center gap-2 px-5 py-3 rounded-lg font-medium text-sm transition ${isDone ? 'bg-sage/15 text-sage' : 'bg-spine text-cream hover:bg-spineLight'}`}
               >
-                {isDone ? '✅ Completed' : 'Mark as complete'}
+                {isDone ? <><CheckCircle2 className="h-4 w-4" /> Completed</> : 'Mark as complete'}
               </button>
               {lessonIdx < lessons.length - 1 && (
-                <button onClick={goToNext} className="text-sm font-medium text-goldDeep hover:underline">
-                  Next lesson →
+                <button onClick={goToNext} className="inline-flex items-center gap-2 text-sm font-medium text-goldDeep hover:underline">
+                  Next lesson
+                  <ChevronRight className="h-4 w-4" />
                 </button>
               )}
             </div>
