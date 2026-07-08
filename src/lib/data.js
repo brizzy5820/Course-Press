@@ -1,29 +1,6 @@
-// src/lib/data.js
-//
-// Data model
-// ----------
-// courses/{courseId}
-//    title, subtitle, description, coverImage, price, currency, published
-//    curriculum: [
-//      { id, title,                       // a Module
-//        lessons: [
-//          { id, title, type: 'video' | 'text',
-//            youtubeId,                   // for type === 'video'
-//            content,                     // markdown/plain text for type === 'text'
-//            resources: [{label, url}],   // optional downloadable files (Storage URLs)
-//            durationMin }
-//        ]
-//      }
-//    ]
-//
-// users/{uid}            -> { name, email, role: 'student' | 'admin', createdAt }
-// enrollments/{uid}_{courseId} -> { uid, courseId, email, grantedAt, source: 'paystack' | 'manual' }
-// progress/{uid}_{courseId}    -> { uid, courseId, completedLessonIds: string[], updatedAt }
-// orders/{reference}      -> { name, email, courseId, amount, status: 'pending'|'paid', createdAt }
-
 import {
   collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc,
-  query, where, serverTimestamp, arrayUnion, arrayRemove, addDoc,
+  query, where, serverTimestamp, arrayUnion, arrayRemove,
 } from 'firebase/firestore'
 import { db } from '../firebase'
 
@@ -65,12 +42,26 @@ export async function deleteCourse(courseId) {
   await deleteDoc(doc(db, 'courses', courseId))
 }
 
-// Helper: total lesson count, flattened lesson list in display order
+// Flatten all lessons into a single ordered array with decimal numbering.
+// Each lesson gets:
+//   moduleIndex  — 1-based position of its module   (e.g. 2)
+//   lessonIndex  — 1-based position within module   (e.g. 3)
+//   lessonNumber — display string                   (e.g. "2.3")
 export function flattenLessons(course) {
   const out = []
-  for (const mod of course?.curriculum || []) {
-    for (const lesson of mod.lessons || []) {
-      out.push({ ...lesson, moduleId: mod.id, moduleTitle: mod.title })
+  const curriculum = course?.curriculum || []
+  for (let mi = 0; mi < curriculum.length; mi++) {
+    const mod = curriculum[mi]
+    const lessons = mod.lessons || []
+    for (let li = 0; li < lessons.length; li++) {
+      out.push({
+        ...lessons[li],
+        moduleId:     mod.id,
+        moduleTitle:  mod.title,
+        moduleIndex:  mi + 1,
+        lessonIndex:  li + 1,
+        lessonNumber: `${mi + 1}.${li + 1}`,
+      })
     }
   }
   return out
@@ -79,7 +70,7 @@ export function flattenLessons(course) {
 // ---------- Users ----------
 
 export async function ensureUserDoc(uid, { name, email, role = 'student' }) {
-  const ref = doc(db, 'users', uid)
+  const ref  = doc(db, 'users', uid)
   const snap = await getDoc(ref)
   if (!snap.exists()) {
     await setDoc(ref, { name, email, role, createdAt: serverTimestamp() })
@@ -94,9 +85,7 @@ export async function getUserProfile(uid) {
 
 // ---------- Enrollments ----------
 
-function enrollmentId(uid, courseId) {
-  return `${uid}_${courseId}`
-}
+function enrollmentId(uid, courseId) { return `${uid}_${courseId}` }
 
 export async function isEnrolled(uid, courseId) {
   if (!uid) return false
@@ -105,12 +94,11 @@ export async function isEnrolled(uid, courseId) {
 }
 
 export async function listMyEnrollments(uid) {
-  const q = query(collection(db, 'enrollments'), where('uid', '==', uid))
+  const q    = query(collection(db, 'enrollments'), where('uid', '==', uid))
   const snap = await getDocs(q)
   return snap.docs.map(d => d.data())
 }
 
-// Used by Cloud Functions (admin SDK) too — kept here for reference of shape.
 export async function grantEnrollment({ uid, courseId, email, source = 'manual' }) {
   await setDoc(doc(db, 'enrollments', enrollmentId(uid, courseId)), {
     uid, courseId, email, source, grantedAt: serverTimestamp(),
@@ -119,9 +107,7 @@ export async function grantEnrollment({ uid, courseId, email, source = 'manual' 
 
 // ---------- Progress ----------
 
-function progressId(uid, courseId) {
-  return `${uid}_${courseId}`
-}
+function progressId(uid, courseId) { return `${uid}_${courseId}` }
 
 export async function getProgress(uid, courseId) {
   const snap = await getDoc(doc(db, 'progress', progressId(uid, courseId)))
@@ -129,7 +115,7 @@ export async function getProgress(uid, courseId) {
 }
 
 export async function markLessonComplete(uid, courseId, lessonId, complete = true) {
-  const ref = doc(db, 'progress', progressId(uid, courseId))
+  const ref  = doc(db, 'progress', progressId(uid, courseId))
   const snap = await getDoc(ref)
   if (!snap.exists()) {
     await setDoc(ref, {
@@ -145,7 +131,7 @@ export async function markLessonComplete(uid, courseId, lessonId, complete = tru
   }
 }
 
-// ---------- Orders (pending checkouts, finalized by Cloud Functions) ----------
+// ---------- Orders ----------
 
 export async function createPendingOrder({ name, email, courseId, amount, reference }) {
   await setDoc(doc(db, 'orders', reference), {

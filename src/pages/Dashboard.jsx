@@ -25,7 +25,7 @@ export default function Dashboard() {
     <div className="min-h-screen bg-cream">
       <header className="border-b border-ink/10">
         <div className="max-w-4xl mx-auto px-6 py-5 flex items-center justify-between">
-          <Link to="/" className="font-display text-xl font-semibold">CoursePress</Link>
+          <Link to="/" className=" text-xl font-semibold">CoursePress</Link>
           <div className="flex items-center gap-4 text-sm">
             <span className="text-ash">{profile?.name || user?.email}</span>
             <button onClick={logout} className="hover:text-goldDeep">Sign out</button>
@@ -34,7 +34,7 @@ export default function Dashboard() {
       </header>
 
       <main className="max-w-4xl mx-auto px-6 py-12">
-        <h1 className="font-display text-3xl font-semibold mb-8">My library</h1>
+        <h1 className=" text-3xl font-semibold mb-8">My library</h1>
 
         {items === null && <p className="text-ash">Loading…</p>}
         {items?.length === 0 && (
@@ -43,21 +43,57 @@ export default function Dashboard() {
           </div>
         )}
 
-        <div className="grid sm:grid-cols-2 gap-5">
-          {items?.map(({ course, percent }) => (
-            <Link
-              key={course.id}
-              to={`/dashboard/${course.id}`}
-              className="block border border-ink/10 rounded-xl p-5 bg-white hover:border-goldDeep/40 transition"
-            >
-              <h3 className="font-display text-lg font-semibold">{course.title}</h3>
-              <div className="mt-4 h-1.5 rounded-full bg-parchment overflow-hidden">
-                <div className="h-full bg-sage" style={{ width: `${percent}%` }} />
-              </div>
-              <p className="text-xs text-ash mt-2 font-mono">{percent}% complete</p>
-            </Link>
-          ))}
+       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-2">
+  {items?.map(({ course, percent }) => (
+    <Link
+      key={course.id}
+      to={`/dashboard/${course.id}`}
+      className="group overflow-hidden rounded-2xl border border-ink/10 bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-goldDeep/30 hover:shadow-xl"
+    >
+      {/* Course Image */}
+      <div className="relative h-52 overflow-hidden bg-parchment">
+        <img
+          src={course.coverImage}
+          alt={course.title}
+          className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+        />
+      </div>
+
+      {/* Content */}
+      <div className="p-6">
+        <h3 className="font-display text-xl font-semibold text-ink line-clamp-2">
+          {course.title}
+        </h3>
+
+        {course.description && (
+          <p className="mt-2 text-sm leading-6 text-ash line-clamp-2">
+            {course.description}
+          </p>
+        )}
+
+        {/* Progress */}
+        <div className="mt-6">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-sm font-medium text-ash">
+              Progress
+            </span>
+
+            <span className="font-mono text-sm font-semibold text-sage">
+              {percent}%
+            </span>
+          </div>
+
+          <div className="h-2 overflow-hidden rounded-full bg-parchment">
+            <div
+              className="h-full rounded-full bg-sage transition-all duration-700"
+              style={{ width: `${percent}%` }}
+            />
+          </div>
         </div>
+      </div>
+    </Link>
+  ))}
+</div>
       </main>
     </div>
   )

@@ -1,87 +1,127 @@
 import { useEffect, useRef, useState } from 'react'
 
-let apiLoadingPromise = null
-function loadYouTubeAPI() {
-  if (window.YT && window.YT.Player) return Promise.resolve()
-  if (apiLoadingPromise) return apiLoadingPromise
-  apiLoadingPromise = new Promise(resolve => {
-    const tag = document.createElement('script')
-    tag.src = 'https://www.youtube.com/iframe_api'
-    document.body.appendChild(tag)
-    window.onYouTubeIframeAPIReady = () => resolve()
-  })
-  return apiLoadingPromise
+// Accept a full YouTube URL OR a bare video ID.
+// Supports: watch?v=, youtu.be/, /embed/, /shorts/
+function extractYouTubeId(input) {
+  if (!input) return ''
+  const s = input.trim()
+  // Bare 11-char ID
+  if (/^[a-zA-Z0-9_-]{11}$/.test(s)) return s
+  // ?v= or &v=
+  const vParam = s.match(/[?&]v=([a-zA-Z0-9_-]{11})/)
+  if (vParam) return vParam[1]
+  // youtu.be/<id>
+  const short = s.match(/youtu\.be\/([a-zA-Z0-9_-]{11})/)
+  if (short) return short[1]
+  // /embed/<id>
+  const embed = s.match(/\/embed\/([a-zA-Z0-9_-]{11})/)
+  if (embed) return embed[1]
+  // /shorts/<id>
+  const shorts = s.match(/\/shorts\/([a-zA-Z0-9_-]{11})/)
+  if (shorts) return shorts[1]
+  return s // fallback — let YouTube decide
 }
 
-const RATES = [0.75, 1, 1.25, 1.5, 1.75, 2]
+let apiReady = null
+function loadYouTubeAPI() {
+  if (window.YT?.Player) return Promise.resolve()
+  if (apiReady) return apiReady
+  apiReady = new Promise(resolve => {
+    const tag = document.createElement('script')
+    tag.src   = 'https://www.youtube.com/iframe_api'
+    document.head.appendChild(tag)
+    window.onYouTubeIframeAPIReady = resolve
+  })
+  return apiReady
+}
+
+const RATES     = [0.75, 1, 1.25, 1.5, 1.75, 2]
 const QUALITIES = [
-  { id: 'small', label: '360p · saves data' },
-  { id: 'medium', label: '480p' },
-  { id: 'hd720', label: '720p' },
+  { id: 'small',  label: '360p · saves data' },
+  { id: 'medium', label: '480p'  },
+  { id: 'hd720',  label: '720p'  },
   { id: 'hd1080', label: '1080p' },
-  { id: 'auto', label: 'Auto' },
+  { id: 'auto',   label: 'Auto'  },
 ]
 
-export default function VideoPlayer({ youtubeId, onEnded }) {
+export default function VideoPlayer({ youtubeId: rawInput, onEnded }) {
+  const videoId    = extractYouTubeId(rawInput)
   const containerRef = useRef(null)
-  const playerRef = useRef(null)
-  const [rate, setRate] = useState(1)
+  const playerRef    = useRef(null)
+  const [rate,    setRate]    = useState(1)
   const [quality, setQuality] = useState('auto')
-  const [ready, setReady] = useState(false)
+  const [ready,   setReady]   = useState(false)
+  const [error,   setError]   = useState('')
 
   useEffect(() => {
     let cancelled = false
     setReady(false)
+    setError('')
+
+    if (!videoId) {
+      setError('No video linked to this lesson yet.')
+      return
+    }
+
     loadYouTubeAPI().then(() => {
       if (cancelled) return
-      if (playerRef.current) playerRef.current.destroy()
+      if (playerRef.current) { playerRef.current.destroy(); playerRef.current = null }
+
       playerRef.current = new window.YT.Player(containerRef.current, {
-        videoId: youtubeId,
+        videoId,
         playerVars: { rel: 0, modestbranding: 1 },
         events: {
-          onReady: () => setReady(true),
-          onStateChange: (e) => {
-            if (e.data === window.YT.PlayerState.ENDED) onEnded?.()
+          onReady: ()  => { if (!cancelled) setReady(true) },
+          onError: ()  => { if (!cancelled) setError('Could not load video. Check the YouTube URL and make sure the video is Unlisted or Public.') },
+          onStateChange: e => {
+            if (!cancelled && e.data === window.YT.PlayerState.ENDED) onEnded?.()
           },
         },
       })
     })
+
     return () => { cancelled = true }
-  }, [youtubeId])
+  }, [videoId])
 
-  function applyRate(r) {
-    setRate(r)
-    playerRef.current?.setPlaybackRate(r)
-  }
-
-  function applyQuality(q) {
-    setQuality(q)
-    playerRef.current?.setPlaybackQuality(q)
+  if (error) {
+    return (
+      <div className="aspect-video rounded-xl bg-slate-100 flex items-center justify-center text-center px-6">
+        <p className="text-sm text-slate-500">{error}</p>
+      </div>
+    )
   }
 
   return (
     <div>
-      <div className="aspect-video rounded-xl overflow-hidden bg-black">
+      <div className="aspect-video rounded-xl overflow-hidden bg-black shadow-lg">
         <div ref={containerRef} className="h-full w-full" />
       </div>
-      <div className="flex flex-wrap gap-3 mt-3 text-xs">
-        <div className="flex items-center gap-1 bg-spineLight rounded-lg p-1">
+
+      {/* Controls */}
+      <div className="flex flex-wrap items-center gap-3 mt-3">
+        {/* Playback speed */}
+        <div className="flex items-center bg-slate-100 rounded-lg p-0.5 gap-0.5">
           {RATES.map(r => (
             <button
               key={r}
               disabled={!ready}
-              onClick={() => applyRate(r)}
-              className={`px-2.5 py-1 rounded-md font-mono ${rate === r ? 'bg-gold text-spine' : 'text-cream/70 hover:text-cream'}`}
+              onClick={() => { setRate(r); playerRef.current?.setPlaybackRate(r) }}
+              className={`px-2.5 py-1 rounded-md font-mono text-xs transition
+                ${rate === r
+                  ? 'bg-white text-ink shadow-sm font-semibold'
+                  : 'text-slate-500 hover:text-ink disabled:opacity-40'}`}
             >
               {r}x
             </button>
           ))}
         </div>
+
+        {/* Quality */}
         <select
           disabled={!ready}
           value={quality}
-          onChange={e => applyQuality(e.target.value)}
-          className="bg-spineLight text-cream/70 rounded-lg px-2.5 py-1 font-mono"
+          onChange={e => { setQuality(e.target.value); playerRef.current?.setPlaybackQuality(e.target.value) }}
+          className="text-xs font-mono bg-slate-100 text-slate-600 rounded-lg px-2.5 py-1.5 border-none outline-none disabled:opacity-40"
         >
           {QUALITIES.map(q => <option key={q.id} value={q.id}>{q.label}</option>)}
         </select>
