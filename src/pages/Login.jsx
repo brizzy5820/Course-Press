@@ -5,7 +5,7 @@ import {
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
 } from 'firebase/auth'
-import { ArrowLeft, CheckCircle2, Loader2, ShieldCheck } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, Loader2, ShieldCheck, BookOpen } from 'lucide-react'
 import { auth } from '../firebase'
 import { useAuth } from '../contexts/AuthContext'
 import { activatePendingEnrollments } from '../lib/access'
@@ -136,7 +136,7 @@ export default function Login() {
   function goLogin()  { setMode('login');  setError(''); setResetOk(false) }
 
   return (
-    <div className="min-h-screen bg-cream px-4 py-8 flex items-center justify-center">
+    <div className="min-h-screen bg-[#F7F8FA] px-4 py-8 flex items-center justify-center">
       <div className="w-full max-w-xl">
         <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_30px_80px_rgba(15,23,42,0.12)]">
 
@@ -144,13 +144,13 @@ export default function Login() {
           <div className="bg-slate-950 px-8 py-10 text-center sm:px-10">
             <Link to="/" className="inline-flex items-center justify-center gap-3 text-cream">
               <span className="inline-flex h-11 w-11 items-center justify-center rounded-3xl bg-gold/10 text-gold shadow-sm">
-                <ShieldCheck className="h-5 w-5" />
+               <BookOpen/>
               </span>
               <span className="font-display text-2xl font-semibold">CoursePress</span>
             </Link>
             <div className="mt-6">
-              <h1 className="font-display text-3xl font-semibold tracking-tight text-white">
-                {mode === 'login' ? 'Welcome back' : 'Reset your password'}
+              <h1 className=" text-3xl font-semibold tracking-tight text-white">
+                {mode === 'login' ? 'Welcome ' : 'Reset your password'}
               </h1>
               <p className="mt-3 text-sm leading-6 text-slate-300/90">
                 {mode === 'login'

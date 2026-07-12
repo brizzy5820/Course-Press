@@ -133,7 +133,7 @@ export default function CourseDetail() {
 
         {/* Hero */}
         <p className="font-mono text-xs uppercase tracking-[0.2em] text-zinc-500 mb-3">Course</p>
-        <h1 className=" text-4xl font-semibold leading-tight text-black">{course.title}</h1>
+        <h1 className="font-sans text-4xl font-semibold leading-tight text-black">{course.title}</h1>
         <p className="text-lg text-zinc-600 mt-3 leading-relaxed">{course.subtitle}</p>
 
         {/* Stats */}
@@ -166,7 +166,7 @@ export default function CourseDetail() {
         )}
 
         {/* Curriculum */}
-        <h2 className="font-display text-2xl font-semibold mt-12 mb-4 text-black">What's inside</h2>
+        <h2 className="font-sans text-2xl font-semibold mt-12 mb-4 text-black">What's inside</h2>
         <div className="space-y-3">
           {(course.curriculum || []).map((mod, mi) => (
             <div key={mod.id} className="border border-zinc-200 rounded-xl overflow-hidden bg-white">

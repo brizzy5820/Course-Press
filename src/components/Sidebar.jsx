@@ -21,7 +21,7 @@ export default function Sidebar({ course, activeLessonId, completedIds, onSelect
       {/* Sidebar panel */}
       <aside
         className={`fixed lg:static inset-y-0 left-0 z-20 flex flex-col
-          w-72 bg-gray-900 text-slate-300 border-r border-slate-800
+          w-72 bg-slate-900 text-slate-300 border-r border-slate-800
           transform transition-transform duration-200 lg:translate-x-0
           ${open ? 'translate-x-0' : '-translate-x-full'}`}
       >
