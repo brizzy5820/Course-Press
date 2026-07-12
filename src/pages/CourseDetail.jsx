@@ -36,8 +36,8 @@ export default function CourseDetail() {
   }, [user, courseId])
 
   if (!course) return (
-    <div className="min-h-screen bg-cream flex items-center justify-center">
-      <Loader2 className="h-6 w-6 animate-spin text-ash" />
+    <div className="min-h-screen bg-[#F7F8FA] flex items-center justify-center">
+      <Loader2 className="h-6 w-6 animate-spin text-zinc-500" />
     </div>
   )
 
@@ -111,17 +111,17 @@ export default function CourseDetail() {
     <div className="min-h-screen bg-[#F7F8FA]">
 
       {/* Header */}
-      <header className="bg-white border-b border-slate-200/80 backdrop-blur sticky top-0 z-10">
+      <header className="bg-white border-b border-zinc-200 backdrop-blur sticky top-0 z-10">
         <div className="max-w-3xl mx-auto px-6 py-4 flex items-center justify-between">
-          <Link to="/" className="font-bold text-ink text-lg tracking-tight">CoursePress</Link>
+          <Link to="/" className="font-bold text-black text-lg tracking-tight">CoursePress</Link>
           {user ? (
-            <Link to="/dashboard" className="text-sm font-medium text-ash hover:text-ink transition flex items-center gap-1.5">
+            <Link to="/dashboard" className="text-sm font-medium text-zinc-600 hover:text-black transition flex items-center gap-1.5">
               My library <ArrowRight className="h-3.5 w-3.5" />
             </Link>
           ) : (
             <Link
               to="/login"
-              className="text-sm font-semibold text-ink hover:text-goldDeep transition"
+              className="text-sm font-semibold text-black hover:text-black transition"
             >
               Sign in
             </Link>
@@ -132,19 +132,19 @@ export default function CourseDetail() {
       <main className="max-w-3xl mx-auto px-6 py-12">
 
         {/* Hero */}
-        <p className="font-mono text-xs uppercase tracking-[0.2em] text-goldDeep mb-3">Course</p>
-        <h1 className="font-display text-4xl font-semibold leading-tight text-ink">{course.title}</h1>
-        <p className="text-lg text-ash mt-3 leading-relaxed">{course.subtitle}</p>
+        <p className="font-mono text-xs uppercase tracking-[0.2em] text-zinc-500 mb-3">Course</p>
+        <h1 className=" text-4xl font-semibold leading-tight text-black">{course.title}</h1>
+        <p className="text-lg text-zinc-600 mt-3 leading-relaxed">{course.subtitle}</p>
 
         {/* Stats */}
         <div className="flex items-center gap-5 mt-5">
-          <span className="flex items-center gap-1.5 text-sm text-ash">
+          <span className="flex items-center gap-1.5 text-sm text-zinc-600">
             <FileText className="h-4 w-4" /> {totalLessons} lessons
           </span>
-          <span className="flex items-center gap-1.5 text-sm text-ash">
+          <span className="flex items-center gap-1.5 text-sm text-zinc-600">
             <Clock className="h-4 w-4" /> Self-paced
           </span>
-          <span className="flex items-center gap-1.5 text-sm text-ash">
+          <span className="flex items-center gap-1.5 text-sm text-zinc-600">
             <CheckCircle2 className="h-4 w-4" /> Lifetime access
           </span>
         </div>
@@ -160,36 +160,36 @@ export default function CourseDetail() {
 
         {/* Description */}
         {course.description && (
-          <div className="prose-reader mt-8 text-ink/80 whitespace-pre-line leading-[1.85] text-[1.02rem]">
+          <div className="prose-reader mt-8 text-black/80 whitespace-pre-line leading-[1.85] text-[1.02rem]">
             {course.description}
           </div>
         )}
 
         {/* Curriculum */}
-        <h2 className="font-display text-2xl font-semibold mt-12 mb-4 text-ink">What's inside</h2>
+        <h2 className="font-display text-2xl font-semibold mt-12 mb-4 text-black">What's inside</h2>
         <div className="space-y-3">
           {(course.curriculum || []).map((mod, mi) => (
-            <div key={mod.id} className="border border-ink/10 rounded-xl overflow-hidden bg-white">
-              <div className="px-5 py-3 bg-parchment/60 flex items-center gap-2">
-                <span className="font-mono text-[10px] text-ash uppercase tracking-wider">Module {mi + 1}</span>
-                <span className="text-ink/20">·</span>
-                <span className="text-sm font-semibold text-ink">{mod.title}</span>
-                <span className="ml-auto font-mono text-xs text-ash">{mod.lessons?.length || 0} lessons</span>
+            <div key={mod.id} className="border border-zinc-200 rounded-xl overflow-hidden bg-white">
+              <div className="px-5 py-3 bg-zinc-100 flex items-center gap-2">
+                <span className="font-mono text-[10px] text-zinc-500 uppercase tracking-wider">Module {mi + 1}</span>
+                <span className="text-zinc-300">·</span>
+                <span className="text-sm font-semibold text-black">{mod.title}</span>
+                <span className="ml-auto font-mono text-xs text-zinc-500">{mod.lessons?.length || 0} lessons</span>
               </div>
-              <ul className="divide-y divide-ink/5">
+              <ul className="divide-y divide-zinc-100">
                 {(mod.lessons || []).map((lesson, li) => (
                   <li key={lesson.id} className="px-5 py-3 flex items-center justify-between gap-3 text-sm">
                     <span className="flex items-center gap-2.5 min-w-0">
-                      <span className="font-mono text-[10px] text-ash shrink-0 w-6">{mi + 1}.{li + 1}</span>
+                      <span className="font-mono text-[10px] text-zinc-500 shrink-0 w-6">{mi + 1}.{li + 1}</span>
                       {lesson.type === 'video'
-                        ? <PlayCircle className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-                        : <FileText   className="h-3.5 w-3.5 text-amber-500 shrink-0" />}
-                      <span className="text-ink truncate">{lesson.title}</span>
+                        ? <PlayCircle className="h-3.5 w-3.5 text-zinc-700 shrink-0" />
+                        : <FileText   className="h-3.5 w-3.5 text-zinc-700 shrink-0" />}
+                      <span className="text-black truncate">{lesson.title}</span>
                     </span>
                     <span className="flex items-center gap-2 shrink-0">
-                      {!enrolled && <Lock className="h-3 w-3 text-ash/50" />}
+                      {!enrolled && <Lock className="h-3 w-3 text-zinc-400" />}
                       {lesson.durationMin && (
-                        <span className="font-mono text-xs text-ash">{lesson.durationMin}m</span>
+                        <span className="font-mono text-xs text-zinc-500">{lesson.durationMin}m</span>
                       )}
                     </span>
                   </li>
@@ -200,38 +200,38 @@ export default function CourseDetail() {
         </div>
 
         {/* CTA */}
-        <div id="checkout" className="mt-14 border-t border-ink/10 pt-10">
+        <div id="checkout" className="mt-14 border-t border-zinc-200 pt-10">
           {enrolled ? (
             <button
               onClick={() => navigate(`/dashboard/${courseId}`)}
-              className="w-full bg-ink text-cream rounded-xl py-4 font-semibold hover:bg-spineLight transition flex items-center justify-center gap-2"
+              className="w-full bg-black text-white rounded-xl py-4 font-semibold hover:bg-zinc-800 transition flex items-center justify-center gap-2"
             >
               Open course <ArrowRight className="h-4 w-4" />
             </button>
 
           ) : paid ? (
-            <div className="bg-sage/8 border border-sage/25 rounded-2xl p-7 text-center space-y-3">
-              <div className="w-12 h-12 rounded-full bg-sage/15 flex items-center justify-center mx-auto">
-                <CheckCircle2 className="h-6 w-6 text-sage" />
+            <div className="bg-zinc-100 border border-zinc-300 rounded-2xl p-7 text-center space-y-3">
+              <div className="w-12 h-12 rounded-full bg-zinc-200 flex items-center justify-center mx-auto">
+                <CheckCircle2 className="h-6 w-6 text-black" />
               </div>
-              <p className="font-display text-xl font-semibold text-sage">Payment received!</p>
-              <p className="text-ash text-sm leading-relaxed">
+              <p className="font-display text-xl font-semibold text-black">Payment received!</p>
+              <p className="text-zinc-600 text-sm leading-relaxed">
                 Your access is ready. Sign in with{' '}
-                <strong className="text-ink">{form.email}</strong> and your phone number.
+                <strong className="text-black">{form.email}</strong> and your phone number.
               </p>
               <button
                 onClick={() => navigate(`/login?redirect=${courseId}`)}
-                className="inline-flex items-center gap-2 mt-2 bg-ink text-cream rounded-lg px-6 py-2.5 font-semibold hover:bg-spineLight transition text-sm"
+                className="inline-flex items-center gap-2 mt-2 bg-black text-white rounded-lg px-6 py-2.5 font-semibold hover:bg-zinc-800 transition text-sm"
               >
                 Sign in now <ArrowRight className="h-4 w-4" />
               </button>
             </div>
 
           ) : (
-            <div className="bg-white border border-ink/10 rounded-2xl p-6 shadow-sm">
+            <div className="bg-white border border-zinc-200 rounded-2xl p-6 shadow-sm">
               <div className="flex items-baseline justify-between mb-6">
-                <h3 className="font-display text-xl font-semibold text-ink">Get instant access</h3>
-                <span className="font-bold text-2xl text-goldDeep">
+                <h3 className="font-display text-xl font-semibold text-black">Get instant access</h3>
+                <span className="font-bold text-2xl text-black">
                   {course.price ? `₦${Number(course.price).toLocaleString()}` : 'Free'}
                 </span>
               </div>
@@ -242,7 +242,7 @@ export default function CourseDetail() {
                   placeholder="Full name"
                   value={form.name}
                   onChange={setField('name')}
-                  className="w-full border border-ink/15 rounded-xl px-4 py-3 text-sm text-ink focus:outline-none focus:border-goldDeep focus:ring-2 focus:ring-gold/10 transition"
+                  className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm text-black focus:outline-none focus:border-black focus:ring-1 focus:ring-black/10 transition"
                 />
                 <input
                   required
@@ -250,7 +250,7 @@ export default function CourseDetail() {
                   placeholder="Email address"
                   value={form.email}
                   onChange={setField('email')}
-                  className="w-full border border-ink/15 rounded-xl px-4 py-3 text-sm text-ink focus:outline-none focus:border-goldDeep focus:ring-2 focus:ring-gold/10 transition"
+                  className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm text-black focus:outline-none focus:border-black focus:ring-1 focus:ring-black/10 transition"
                 />
                 <div>
                   <input
@@ -259,16 +259,16 @@ export default function CourseDetail() {
                     placeholder="Phone number (e.g. 08012345678)"
                     value={form.phone}
                     onChange={setField('phone')}
-                    className="w-full border border-ink/15 rounded-xl px-4 py-3 text-sm text-ink focus:outline-none focus:border-goldDeep focus:ring-2 focus:ring-gold/10 transition"
+                    className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm text-black focus:outline-none focus:border-black focus:ring-1 focus:ring-black/10 transition"
                   />
-                  <p className="text-xs text-ash mt-2 ml-1 flex items-center gap-1.5">
+                  <p className="text-xs text-zinc-500 mt-2 ml-1 flex items-center gap-1.5">
                     <Lock className="h-3 w-3" />
                     Your phone number becomes your sign-in password — remember it.
                   </p>
                 </div>
 
                 {error && (
-                  <div className="bg-red-50 border border-red-100 rounded-xl px-4 py-3 text-sm text-red-600">
+                  <div className="bg-zinc-100 border border-zinc-300 rounded-xl px-4 py-3 text-sm text-black">
                     {error}
                   </div>
                 )}
@@ -276,14 +276,14 @@ export default function CourseDetail() {
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="w-full bg-goldDeep text-white rounded-xl py-3.5 font-semibold hover:bg-gold transition disabled:opacity-60 flex items-center justify-center gap-2 mt-2"
+                  className="w-full bg-black text-white rounded-xl py-3.5 font-semibold hover:bg-zinc-800 transition disabled:opacity-60 flex items-center justify-center gap-2 mt-2"
                 >
                   {submitting
                     ? <><Loader2 className="h-4 w-4 animate-spin" /> Opening checkout…</>
                     : 'Pay with card or bank transfer'}
                 </button>
 
-                <p className="text-xs text-ash text-center pt-1">
+                <p className="text-xs text-zinc-500 text-center pt-1">
                   New accounts are opened instantly the moment payment clears.
                 </p>
               </form>
