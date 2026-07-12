@@ -5,6 +5,10 @@ import {
   signInWithEmailAndPassword,
 } from 'firebase/auth'
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore'
+import {
+  PlayCircle, FileText, Lock, Clock,
+  CheckCircle2, ArrowRight, Loader2,
+} from 'lucide-react'
 import { auth, db } from '../firebase'
 import { getCourse, isEnrolled, createPendingOrder } from '../lib/data'
 import {
@@ -24,14 +28,18 @@ export default function CourseDetail() {
   const [form,       setForm]       = useState({ name: '', email: '', phone: '' })
   const [submitting, setSubmitting] = useState(false)
   const [error,      setError]      = useState('')
-  const [paid,       setPaid]       = useState(false)   // existing-user fallback state
+  const [paid,       setPaid]       = useState(false)
 
   useEffect(() => { getCourse(courseId).then(setCourse) }, [courseId])
   useEffect(() => {
     if (user && courseId) isEnrolled(user.uid, courseId).then(setEnrolled)
   }, [user, courseId])
 
-  if (!course) return <div className="min-h-screen bg-cream" />
+  if (!course) return (
+    <div className="min-h-screen bg-cream flex items-center justify-center">
+      <Loader2 className="h-6 w-6 animate-spin text-ash" />
+    </div>
+  )
 
   function setField(key) {
     return e => setForm(f => ({ ...f, [key]: e.target.value }))
@@ -40,7 +48,6 @@ export default function CourseDetail() {
   async function handlePay(e) {
     e.preventDefault()
     setError('')
-
     if (!form.name || !form.email || !form.phone) {
       setError('Please fill in all three fields.')
       return
@@ -49,17 +56,13 @@ export default function CourseDetail() {
       setError('Please enter a valid phone number — it will be used to sign in later.')
       return
     }
-
     setSubmitting(true)
-
     try {
       const reference = `cp_${courseId}_${Date.now()}`
-
       await createPendingOrder({
         name: form.name, email: form.email,
         courseId, amount: course.price, reference,
       })
-
       const handler = window.PaystackPop.setup({
         key:      import.meta.env.VITE_PAYSTACK_PUBLIC_KEY,
         email:    form.email,
@@ -67,65 +70,33 @@ export default function CourseDetail() {
         currency: course.currency || 'NGN',
         ref:      reference,
         metadata: { name: form.name, courseId },
-
         callback: async function () {
           try {
-            const exists = await accountExists(form.email)
-
+            const exists     = await accountExists(form.email)
+            const cleanPhone = form.phone.replace(/\D/g, '')
             if (!exists) {
-              // ── New user ─────────────────────────────────────────────────
-              // createUserWithEmailAndPassword also signs them in immediately.
-              const cleanPhone = form.phone.replace(/\D/g, '')
               const cred = await createUserWithEmailAndPassword(auth, form.email, cleanPhone)
               const uid  = cred.user.uid
-
-              await writeProfileAndEnrollment({
-                uid, name: form.name, email: form.email,
-                courseId, source: 'paystack',
-              })
-              // Activate any admin pending grants too
+              await writeProfileAndEnrollment({ uid, name: form.name, email: form.email, courseId, source: 'paystack' })
               await activatePendingEnrollments(uid, form.email)
-
-              // Signed in and enrolled — go straight to the course
               navigate(`/dashboard/${courseId}`, { replace: true })
-
             } else {
-              // ── Existing user ────────────────────────────────────────────
-              // We cannot sign them in here without their password, so save a
-              // pending enrollment and redirect them to /login to sign in.
-              await setDoc(
-                doc(db, 'pendingEnrollments', `${form.email}_${courseId}`),
-                {
-                  name: form.name, email: form.email,
-                  courseId, source: 'paystack',
-                  createdAt: serverTimestamp(),
-                }
-              )
-              // Mark order paid
-              await setDoc(
-                doc(db, 'orders', reference),
-                { status: 'paid' },
-                { merge: true }
-              )
-              // Show them the redirect message
+              await setDoc(doc(db, 'pendingEnrollments', `${form.email}_${courseId}`), {
+                name: form.name, email: form.email, courseId,
+                source: 'paystack', createdAt: serverTimestamp(),
+              })
+              await setDoc(doc(db, 'orders', reference), { status: 'paid' }, { merge: true })
               setPaid(true)
               setSubmitting(false)
             }
           } catch (err) {
             console.error(err)
-            setError(
-              'Payment received but access setup failed. ' +
-              'Contact support with your email and we will resolve it immediately.'
-            )
+            setError('Payment received but access setup failed. Contact support with your email.')
             setSubmitting(false)
           }
         },
-
-        onClose: function () {
-          setSubmitting(false)
-        },
+        onClose: function () { setSubmitting(false) },
       })
-
       handler.openIframe()
     } catch (err) {
       console.error(err)
@@ -134,43 +105,92 @@ export default function CourseDetail() {
     }
   }
 
+  const totalLessons = (course.curriculum || []).reduce((s, m) => s + (m.lessons?.length || 0), 0)
+
   return (
     <div className="min-h-screen bg-cream">
-      <header className="border-b border-ink/10">
-        <div className="max-w-3xl mx-auto px-6 py-5">
-          <Link to="/" className="font-display text-xl font-semibold tracking-tight">CoursePress</Link>
+
+      {/* Header */}
+      <header className="border-b border-ink/10 bg-cream/95 backdrop-blur sticky top-0 z-10">
+        <div className="max-w-3xl mx-auto px-6 py-4 flex items-center justify-between">
+          <Link to="/" className="font-bold text-ink text-lg tracking-tight">CoursePress</Link>
+          {user ? (
+            <Link to="/dashboard" className="text-sm font-medium text-ash hover:text-ink transition flex items-center gap-1.5">
+              My library <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          ) : (
+            <Link
+              to="/login"
+              className="text-sm font-semibold text-ink hover:text-goldDeep transition"
+            >
+              Sign in
+            </Link>
+          )}
         </div>
       </header>
 
       <main className="max-w-3xl mx-auto px-6 py-12">
-        <p className="font-mono text-xs uppercase tracking-[0.2em] text-goldDeep mb-3">Course</p>
-        <h1 className="font-display text-4xl font-semibold leading-tight">{course.title}</h1>
-        <p className="text-lg text-ash mt-3">{course.subtitle}</p>
 
+        {/* Hero */}
+        <p className="font-mono text-xs uppercase tracking-[0.2em] text-goldDeep mb-3">Course</p>
+        <h1 className="font-display text-4xl font-semibold leading-tight text-ink">{course.title}</h1>
+        <p className="text-lg text-ash mt-3 leading-relaxed">{course.subtitle}</p>
+
+        {/* Stats */}
+        <div className="flex items-center gap-5 mt-5">
+          <span className="flex items-center gap-1.5 text-sm text-ash">
+            <FileText className="h-4 w-4" /> {totalLessons} lessons
+          </span>
+          <span className="flex items-center gap-1.5 text-sm text-ash">
+            <Clock className="h-4 w-4" /> Self-paced
+          </span>
+          <span className="flex items-center gap-1.5 text-sm text-ash">
+            <CheckCircle2 className="h-4 w-4" /> Lifetime access
+          </span>
+        </div>
+
+        {/* Cover */}
         {course.coverImage && (
-          <img src={course.coverImage} alt=""
-            className="w-full rounded-2xl mt-8 aspect-[16/9] object-cover" />
+          <img
+            src={course.coverImage}
+            alt={course.title}
+            className="w-full rounded-2xl mt-8 aspect-[16/9] object-cover shadow-sm"
+          />
         )}
 
-        <div className="prose-reader mt-8 text-ink/90 whitespace-pre-line">{course.description}</div>
+        {/* Description */}
+        {course.description && (
+          <div className="prose-reader mt-8 text-ink/80 whitespace-pre-line leading-[1.85] text-[1.02rem]">
+            {course.description}
+          </div>
+        )}
 
-        {/* Course outline */}
-        <h2 className="font-display text-2xl font-semibold mt-12 mb-4">What's inside</h2>
+        {/* Curriculum */}
+        <h2 className="font-display text-2xl font-semibold mt-12 mb-4 text-ink">What's inside</h2>
         <div className="space-y-3">
-          {(course.curriculum || []).map((mod, i) => (
+          {(course.curriculum || []).map((mod, mi) => (
             <div key={mod.id} className="border border-ink/10 rounded-xl overflow-hidden bg-white">
-              <div className="px-5 py-3 bg-parchment/60 font-medium text-sm">
-                Module {i + 1}: {mod.title}
+              <div className="px-5 py-3 bg-parchment/60 flex items-center gap-2">
+                <span className="font-mono text-[10px] text-ash uppercase tracking-wider">Module {mi + 1}</span>
+                <span className="text-ink/20">·</span>
+                <span className="text-sm font-semibold text-ink">{mod.title}</span>
+                <span className="ml-auto font-mono text-xs text-ash">{mod.lessons?.length || 0} lessons</span>
               </div>
               <ul className="divide-y divide-ink/5">
-                {(mod.lessons || []).map(lesson => (
-                  <li key={lesson.id}
-                    className="px-5 py-3 flex items-center justify-between text-sm">
-                    <span className="flex items-center gap-2">
-                      {lesson.type === 'video' ? '🎬' : '📖'} {lesson.title}
+                {(mod.lessons || []).map((lesson, li) => (
+                  <li key={lesson.id} className="px-5 py-3 flex items-center justify-between gap-3 text-sm">
+                    <span className="flex items-center gap-2.5 min-w-0">
+                      <span className="font-mono text-[10px] text-ash shrink-0 w-6">{mi + 1}.{li + 1}</span>
+                      {lesson.type === 'video'
+                        ? <PlayCircle className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                        : <FileText   className="h-3.5 w-3.5 text-amber-500 shrink-0" />}
+                      <span className="text-ink truncate">{lesson.title}</span>
                     </span>
-                    <span className="font-mono text-xs text-ash">
-                      {!enrolled && '🔒 '}{lesson.durationMin ? `${lesson.durationMin} min` : ''}
+                    <span className="flex items-center gap-2 shrink-0">
+                      {!enrolled && <Lock className="h-3 w-3 text-ash/50" />}
+                      {lesson.durationMin && (
+                        <span className="font-mono text-xs text-ash">{lesson.durationMin}m</span>
+                      )}
                     </span>
                   </li>
                 ))}
@@ -181,48 +201,48 @@ export default function CourseDetail() {
 
         {/* CTA */}
         <div id="checkout" className="mt-14 border-t border-ink/10 pt-10">
-
           {enrolled ? (
             <button
               onClick={() => navigate(`/dashboard/${courseId}`)}
-              className="w-full bg-spine text-cream rounded-xl py-4 font-semibold hover:bg-spineLight transition"
+              className="w-full bg-ink text-cream rounded-xl py-4 font-semibold hover:bg-spineLight transition flex items-center justify-center gap-2"
             >
-              Open course →
+              Open course <ArrowRight className="h-4 w-4" />
             </button>
 
           ) : paid ? (
-            // Existing user who just paid — redirect them to sign in
-            <div className="bg-sage/10 border border-sage/30 rounded-xl p-6 space-y-3 text-center">
+            <div className="bg-sage/8 border border-sage/25 rounded-2xl p-7 text-center space-y-3">
+              <div className="w-12 h-12 rounded-full bg-sage/15 flex items-center justify-center mx-auto">
+                <CheckCircle2 className="h-6 w-6 text-sage" />
+              </div>
               <p className="font-display text-xl font-semibold text-sage">Payment received!</p>
-              <p className="text-ash text-sm">
+              <p className="text-ash text-sm leading-relaxed">
                 Your access is ready. Sign in with{' '}
-                <strong className="text-ink">{form.email}</strong> and your phone number
-                to open the course.
+                <strong className="text-ink">{form.email}</strong> and your phone number.
               </p>
               <button
                 onClick={() => navigate(`/login?redirect=${courseId}`)}
-                className="inline-block mt-2 bg-spine text-cream rounded-lg px-6 py-2.5 font-medium hover:bg-spineLight transition text-sm"
+                className="inline-flex items-center gap-2 mt-2 bg-ink text-cream rounded-lg px-6 py-2.5 font-semibold hover:bg-spineLight transition text-sm"
               >
-                Sign in now →
+                Sign in now <ArrowRight className="h-4 w-4" />
               </button>
             </div>
 
           ) : (
-            <form onSubmit={handlePay} className="bg-white border border-ink/10 rounded-2xl p-6">
-              <div className="flex items-baseline justify-between mb-5">
-                <h3 className="font-display text-xl font-semibold">Get instant access</h3>
-                <span className="font-semibold text-2xl text-goldDeep">
+            <div className="bg-white border border-ink/10 rounded-2xl p-6 shadow-sm">
+              <div className="flex items-baseline justify-between mb-6">
+                <h3 className="font-display text-xl font-semibold text-ink">Get instant access</h3>
+                <span className="font-bold text-2xl text-goldDeep">
                   {course.price ? `₦${Number(course.price).toLocaleString()}` : 'Free'}
                 </span>
               </div>
 
-              <div className="space-y-3">
+              <form onSubmit={handlePay} className="space-y-3">
                 <input
                   required
                   placeholder="Full name"
                   value={form.name}
                   onChange={setField('name')}
-                  className="w-full border border-ink/15 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-goldDeep"
+                  className="w-full border border-ink/15 rounded-xl px-4 py-3 text-sm text-ink focus:outline-none focus:border-goldDeep focus:ring-2 focus:ring-gold/10 transition"
                 />
                 <input
                   required
@@ -230,7 +250,7 @@ export default function CourseDetail() {
                   placeholder="Email address"
                   value={form.email}
                   onChange={setField('email')}
-                  className="w-full border border-ink/15 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-goldDeep"
+                  className="w-full border border-ink/15 rounded-xl px-4 py-3 text-sm text-ink focus:outline-none focus:border-goldDeep focus:ring-2 focus:ring-gold/10 transition"
                 />
                 <div>
                   <input
@@ -239,29 +259,35 @@ export default function CourseDetail() {
                     placeholder="Phone number (e.g. 08012345678)"
                     value={form.phone}
                     onChange={setField('phone')}
-                    className="w-full border border-ink/15 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-goldDeep"
+                    className="w-full border border-ink/15 rounded-xl px-4 py-3 text-sm text-ink focus:outline-none focus:border-goldDeep focus:ring-2 focus:ring-gold/10 transition"
                   />
-                  <p className="text-xs text-ash mt-1.5 ml-1">
+                  <p className="text-xs text-ash mt-2 ml-1 flex items-center gap-1.5">
+                    <Lock className="h-3 w-3" />
                     Your phone number becomes your sign-in password — remember it.
                   </p>
                 </div>
-              </div>
 
-              {error && (
-                <p className="text-red-600 text-sm mt-3">{error}</p>
-              )}
+                {error && (
+                  <div className="bg-red-50 border border-red-100 rounded-xl px-4 py-3 text-sm text-red-600">
+                    {error}
+                  </div>
+                )}
 
-              <button
-                disabled={submitting}
-                className="mt-5 w-full bg-goldDeep text-white rounded-lg py-3.5 font-semibold hover:bg-gold transition disabled:opacity-60"
-              >
-                {submitting ? 'Opening secure checkout…' : 'Pay with card or bank transfer'}
-              </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="w-full bg-goldDeep text-white rounded-xl py-3.5 font-semibold hover:bg-gold transition disabled:opacity-60 flex items-center justify-center gap-2 mt-2"
+                >
+                  {submitting
+                    ? <><Loader2 className="h-4 w-4 animate-spin" /> Opening checkout…</>
+                    : 'Pay with card or bank transfer'}
+                </button>
 
-              <p className="text-xs text-ash mt-3 text-center">
-                New accounts are opened instantly the moment payment clears.
-              </p>
-            </form>
+                <p className="text-xs text-ash text-center pt-1">
+                  New accounts are opened instantly the moment payment clears.
+                </p>
+              </form>
+            </div>
           )}
         </div>
       </main>

@@ -19,10 +19,10 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-cream">
-      <header className="border-b border-ink/10">
+    <div className="min-h-screen bg-[#F7F8FA]">
+      <header className="bg-white border-b border-slate-200/80">
         <div className="max-w-5xl mx-auto px-6 py-5 flex items-center justify-between">
-          <Link to="/" className="font-display text-xl font-semibold tracking-tight">
+          <Link to="/" className="font-bold text-slate-900 text-lg tracking-tight">
             CoursePress
           </Link>
           {user ? (
@@ -82,13 +82,13 @@ function CourseCard({ course }) {
             className="h-full w-full object-cover group-hover:scale-105 transition duration-500"
           />
         ) : (
-          <div className="h-full w-full flex items-center justify-center font-display text-3xl text-ash/40">
+          <div className="h-full w-full flex items-center justify-center font-bold text-3xl text-ash/40">
             {course.title?.[0] || '?'}
           </div>
         )}
       </div>
       <div className="p-5">
-        <h3 className="font-display text-xl font-semibold leading-snug">{course.title}</h3>
+        <h3 className="tracking-tight text-xl font-semibold leading-snug">{course.title}</h3>
         <p className="text-sm text-ash mt-1 line-clamp-2">{course.subtitle}</p>
         <div className="mt-4 flex items-center justify-between">
           <span className="font-mono text-xs text-ash">{lessonCount} lessons</span>
