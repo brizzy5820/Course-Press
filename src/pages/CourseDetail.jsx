@@ -108,10 +108,10 @@ export default function CourseDetail() {
   const totalLessons = (course.curriculum || []).reduce((s, m) => s + (m.lessons?.length || 0), 0)
 
   return (
-    <div className="min-h-screen bg-cream">
+    <div className="min-h-screen bg-[#F7F8FA]">
 
       {/* Header */}
-      <header className="border-b border-ink/10 bg-cream/95 backdrop-blur sticky top-0 z-10">
+      <header className="bg-white border-b border-slate-200/80 backdrop-blur sticky top-0 z-10">
         <div className="max-w-3xl mx-auto px-6 py-4 flex items-center justify-between">
           <Link to="/" className="font-bold text-ink text-lg tracking-tight">CoursePress</Link>
           {user ? (
