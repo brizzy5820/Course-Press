@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   BookOpen, LogOut, Trash2, ChevronRight,
   CheckCircle2, Loader2, Pencil, X, User,
-  ArrowRight, GraduationCap, Clock,
+  ArrowRight, GraduationCap, Clock, Search,
 } from 'lucide-react'
 import {
   reauthenticateWithCredential,
@@ -23,6 +23,8 @@ export default function Dashboard() {
   const navigate                  = useNavigate()
   const [items,       setItems]       = useState(null)
   const [accountOpen, setAccountOpen] = useState(false)
+  const [filter,      setFilter]      = useState('all')
+  const [query,       setQuery]       = useState('')
 
   useEffect(() => {
     if (!user) return
@@ -54,80 +56,147 @@ export default function Dashboard() {
   const initials = (profile?.name || user?.email || '?')
     .split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
 
+  // Counts drive the filter tabs — purely presentational, no change to data fetching.
+  const counts = useMemo(() => {
+    if (!items) return { all: 0, active: 0, done: 0 }
+    return {
+      all:    items.length,
+      active: items.filter(i => i.percent > 0 && i.percent < 100).length,
+      done:   items.filter(i => i.percent === 100).length,
+    }
+  }, [items])
+
+  const visible = useMemo(() => {
+    if (!items) return []
+    return items
+      .filter(i => filter === 'active' ? (i.percent > 0 && i.percent < 100)
+                 : filter === 'done'   ? i.percent === 100
+                 : true)
+      .filter(i => i.course.title.toLowerCase().includes(query.trim().toLowerCase()))
+  }, [items, filter, query])
+
   return (
     <div className="min-h-screen bg-[#F7F8FA]">
 
       {/* ── Header ── */}
-      <header className="bg-white border-b border-slate-200/80 sticky top-0 z-10">
+      <header className="bg-white/90 backdrop-blur-sm border-b border-zinc-200 sticky top-0 z-10">
         <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
-          <Link to="/" className="font-bold text-slate-900 text-lg tracking-tight">
-            CoursePress
-          </Link>
-          <button
-            onClick={() => setAccountOpen(true)}
-            className="flex items-center gap-2.5 rounded-full border border-slate-200 pl-3 pr-1.5 py-1.5 hover:border-slate-300 hover:bg-slate-50 transition group"
-          >
-            <span className="text-sm font-medium text-slate-600 max-w-[160px] truncate hidden sm:block group-hover:text-slate-900 transition">
-              {profile?.name || user?.email}
+          <Link to="/" className="flex items-center gap-2.5">
+            <span className=" font-bold text-zinc-950 text-[17px] tracking-tight">
+              CoursePress
             </span>
-            <div className="h-7 w-7 rounded-full bg-slate-900 text-white flex items-center justify-center text-xs font-bold shrink-0">
-              {initials}
-            </div>
-          </button>
+          </Link>
+
+          <div className="flex items-center gap-1">
+            <Link
+              to="/"
+              className="hidden sm:flex items-center gap-1.5 text-sm font-medium text-zinc-500 hover:text-zinc-900 transition px-3 py-2 rounded-lg hover:bg-zinc-100"
+            >
+              <BookOpen className="h-4 w-4" /> Browse
+            </Link>
+            <button
+              onClick={() => setAccountOpen(true)}
+              className="flex items-center gap-2.5 rounded-full border border-zinc-200 pl-3 pr-1.5 py-1.5 hover:border-zinc-300 hover:bg-white transition group ml-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40"
+            >
+              <span className="text-sm font-medium text-zinc-600 max-w-[160px] truncate hidden sm:block group-hover:text-zinc-900 transition">
+                {profile?.name || user?.email}
+              </span>
+              <div className="h-7 w-7 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs font-semibold shrink-0">
+                {initials}
+              </div>
+            </button>
+          </div>
         </div>
       </header>
 
       {/* ── Page ── */}
-      <main className="max-w-5xl mx-auto px-6 py-10">
+      <main className="max-w-5xl mx-auto px-6 py-10 lg:py-14">
 
-        {/* Page title */}
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">My library</h1>
-          <p className="text-slate-500 text-sm mt-1">
-            {items === null
-              ? ''
-              : items.length === 0
-              ? 'No courses yet'
-              : `${items.length} course${items.length !== 1 ? 's' : ''} enrolled`}
-          </p>
+        {/* Page title + search */}
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-5 mb-8">
+          <div>
+            <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-indigo-600 mb-2">library</p>
+            <h1 className=" text-2xl font-semibold text-zinc-950 tracking-tight">
+              {items?.length ? 'Continue learning' : 'My library'}
+            </h1>
+            <p className="text-zinc-500 text-sm mt-1.5">
+              {items === null
+                ? ''
+                : items.length === 0
+                ? 'Nothing enrolled yet — your courses will show up here.'
+                : `${items.length} course${items.length !== 1 ? 's' : ''} · ${counts.done} completed`}
+            </p>
+          </div>
+
+          {items && items.length > 0 && (
+            <div className="relative w-full sm:w-56">
+              <Search className="h-3.5 w-3.5 text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                placeholder="Search your courses"
+                className="w-full bg-white border border-zinc-200 rounded-lg pl-9 pr-3 py-2 text-sm text-zinc-800 placeholder:text-zinc-400 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50 transition"
+              />
+            </div>
+          )}
         </div>
+
+        {/* Filter tabs — quick way to jump between all / in-progress / completed */}
+        {items && items.length > 0 && (
+          <div className="flex items-center gap-1.5 mb-6">
+            <Tab label="All"          count={counts.all}    active={filter === 'all'}    onClick={() => setFilter('all')} />
+            <Tab label="In progress"  count={counts.active} active={filter === 'active'} onClick={() => setFilter('active')} />
+            <Tab label="Completed"    count={counts.done}   active={filter === 'done'}   onClick={() => setFilter('done')} />
+          </div>
+        )}
 
         {/* Loading */}
         {items === null && (
           <div className="flex items-center justify-center py-32">
-            <Loader2 className="h-6 w-6 animate-spin text-slate-300" />
+            <Loader2 className="h-5 w-5 animate-spin text-zinc-300" />
           </div>
         )}
 
-        {/* Empty */}
+        {/* Empty library */}
         {items?.length === 0 && (
-          <div className="bg-white border border-slate-200 rounded-2xl p-14 text-center">
-            <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-4">
-              <GraduationCap className="h-7 w-7 text-slate-400" />
+          <div className="bg-white border border-zinc-200 rounded-2xl p-14 text-center">
+            <div className="w-14 h-14 rounded-2xl bg-indigo-50 flex items-center justify-center mx-auto mb-4">
+              <GraduationCap className="h-7 w-7 text-indigo-500" />
             </div>
-            <p className="font-semibold text-slate-700">No courses in your library</p>
-            <p className="text-sm text-slate-400 mt-1">Browse and purchase a course to get started.</p>
+            <p className="font-serif font-semibold text-lg text-zinc-900">No courses in your library</p>
+            <p className="text-sm text-zinc-500 mt-1.5">Browse the catalog and enroll to get started.</p>
             <Link
               to="/"
-              className="inline-flex items-center gap-2 mt-5 bg-slate-900 text-white rounded-xl px-5 py-2.5 text-sm font-semibold hover:bg-black transition"
+              className="inline-flex items-center gap-2 mt-6 bg-zinc-950 text-white rounded-xl px-5 py-2.5 text-sm font-semibold hover:bg-zinc-800 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40 focus-visible:ring-offset-2"
             >
               Browse courses <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
         )}
 
+        {/* No search/filter results */}
+        {items && items.length > 0 && visible.length === 0 && (
+          <div className="text-center py-24">
+            <p className="text-zinc-500 text-sm">
+              {query ? `No courses match "${query}".` : 'Nothing here yet.'}
+            </p>
+          </div>
+        )}
+
         {/* Course grid */}
-        <div className="grid gap-5 sm:grid-cols-2">
-          {items?.map(({ course, percent, completed, total }) => (
-            <CourseCard
-              key={course.id}
-              course={course}
-              percent={percent}
-              completed={completed}
-              total={total}
-            />
-          ))}
-        </div>
+        {visible.length > 0 && (
+          <div className="grid gap-5 sm:grid-cols-2">
+            {visible.map(({ course, percent, completed, total }) => (
+              <CourseCard
+                key={course.id}
+                course={course}
+                percent={percent}
+                completed={completed}
+                total={total}
+              />
+            ))}
+          </div>
+        )}
       </main>
 
       {/* Account panel */}
@@ -144,33 +213,47 @@ export default function Dashboard() {
   )
 }
 
+// ── Filter tab ────────────────────────────────────────────────────────────────
+
+function Tab({ label, count, active, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-[13px] font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40
+        ${active ? 'bg-zinc-950 text-white' : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100'}`}
+    >
+      {label}
+      <span className="text-[11px] tabular-nums text-current opacity-60">{count}</span>
+    </button>
+  )
+}
+
 // ── Course card ──────────────────────────────────────────────────────────────
 
 function CourseCard({ course, percent, completed, total }) {
-  const isComplete  = percent === 100
-  const isStarted   = percent > 0
+  const isComplete = percent === 100
+  const isStarted  = percent > 0
 
   return (
     <Link
       to={`/dashboard/${course.id}`}
-      className="group bg-white rounded-2xl border border-slate-200 overflow-hidden hover:border-slate-300 hover:shadow-[0_8px_30px_-8px_rgba(0,0,0,0.12)] hover:-translate-y-0.5 transition-all duration-200 flex flex-col"
+      className="group bg-white rounded-2xl border border-zinc-200 overflow-hidden hover:border-zinc-300 hover:shadow-[0_12px_32px_-12px_rgba(0,0,0,0.14)] hover:-translate-y-0.5 transition-all duration-300 flex flex-col"
     >
       {/* Cover */}
-      <div className="aspect-[16/9] bg-slate-100 overflow-hidden relative">
+      <div className="aspect-[16/9] bg-zinc-100 overflow-hidden relative">
         {course.coverImage ? (
           <img
             src={course.coverImage}
             alt={course.title}
-            className="h-full w-full object-cover group-hover:scale-[1.03] transition duration-500"
+            className="h-full w-full object-cover group-hover:scale-[1.04] transition duration-700 ease-out"
           />
         ) : (
           <div className="h-full w-full flex items-center justify-center">
-            <BookOpen className="h-10 w-10 text-slate-300" />
+            <BookOpen className="h-9 w-9 text-zinc-300" />
           </div>
         )}
-        {/* Completion badge */}
         {isComplete && (
-          <div className="absolute top-3 right-3 bg-emerald-500 text-white text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1 shadow-sm">
+          <div className="absolute top-3 right-3 bg-emerald-600 text-white text-[10px] font-semibold px-2.5 py-1 rounded-full flex items-center gap-1 shadow-sm">
             <CheckCircle2 className="h-3 w-3" /> Complete
           </div>
         )}
@@ -178,16 +261,16 @@ function CourseCard({ course, percent, completed, total }) {
 
       {/* Content */}
       <div className="p-5 flex flex-col flex-1">
-        <h3 className="font-bold text-slate-900 text-[15px] leading-snug line-clamp-2">
+        <h3 className=" font-semibold text-zinc-950 text-[16px] leading-snug line-clamp-2">
           {course.title}
         </h3>
         {course.subtitle && (
-          <p className="text-xs text-slate-500 mt-1 line-clamp-1">{course.subtitle}</p>
+          <p className="text-[13px] text-zinc-500 mt-1 line-clamp-1">{course.subtitle}</p>
         )}
 
         <div className="mt-auto pt-4">
           {/* Stats row */}
-          <div className="flex items-center gap-4 mb-3 text-xs text-slate-400">
+          <div className="flex items-center gap-4 mb-3 text-xs text-zinc-400">
             <span className="flex items-center gap-1.5">
               <BookOpen className="h-3.5 w-3.5" />
               {total} lessons
@@ -201,18 +284,18 @@ function CourseCard({ course, percent, completed, total }) {
           {/* Progress bar */}
           <div>
             <div className="flex justify-between items-center mb-1.5">
-              <span className="text-xs text-slate-400 font-medium">
+              <span className="text-xs text-zinc-400 font-medium">
                 {isComplete ? 'Completed' : isStarted ? 'In progress' : 'Not started'}
               </span>
-              <span className={`text-xs font-bold font-mono
-                ${isComplete ? 'text-emerald-600' : isStarted ? 'text-blue-600' : 'text-slate-400'}`}>
+              <span className={`text-xs font-semibold font-mono tabular-nums
+                ${isComplete ? 'text-emerald-600' : isStarted ? 'text-indigo-600' : 'text-zinc-400'}`}>
                 {percent}%
               </span>
             </div>
-            <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+            <div className="h-1.5 bg-zinc-100 rounded-full overflow-hidden">
               <div
                 className={`h-full rounded-full transition-all duration-700
-                  ${isComplete ? 'bg-emerald-500' : 'bg-blue-500'}`}
+                  ${isComplete ? 'bg-emerald-500' : 'bg-indigo-500'}`}
                 style={{ width: `${percent}%` }}
               />
             </div>
@@ -220,11 +303,11 @@ function CourseCard({ course, percent, completed, total }) {
         </div>
 
         {/* CTA row */}
-        <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-100">
-          <span className="text-xs font-semibold text-slate-400 group-hover:text-slate-700 transition">
+        <div className="flex items-center justify-between mt-4 pt-4 border-t border-zinc-100">
+          <span className="text-xs font-semibold text-zinc-400 group-hover:text-zinc-900 transition">
             {isComplete ? 'Review course' : isStarted ? 'Continue' : 'Start learning'}
           </span>
-          <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-slate-600 group-hover:translate-x-0.5 transition" />
+          <ChevronRight className="h-4 w-4 text-zinc-300 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition" />
         </div>
       </div>
     </Link>
@@ -308,27 +391,27 @@ function AccountPanel({ open, onClose, user, profile, onLogout, navigate, toast 
     <>
       <div
         onClick={onClose}
-        className="fixed inset-0 bg-black/25 z-40 backdrop-blur-[2px]"
+        className="fixed inset-0 bg-zinc-950/30 z-40 backdrop-blur-[2px]"
       />
 
       <div className="fixed inset-y-0 right-0 z-50 w-full max-w-[340px] bg-white shadow-2xl flex flex-col">
 
         {/* Panel header */}
-        <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100">
+        <div className="flex items-center justify-between px-6 py-5 border-b border-zinc-100">
           <div className="flex items-center gap-2">
             {view !== 'menu' && (
               <button
                 onClick={() => { setView('menu'); setError('') }}
-                className="text-slate-400 hover:text-slate-600 transition mr-1"
+                className="text-zinc-400 hover:text-zinc-600 transition mr-1"
               >
                 <ChevronRight className="h-4 w-4 rotate-180" />
               </button>
             )}
-            <h2 className="font-bold text-slate-900 text-base">{heading}</h2>
+            <h2 className="font-semibold text-zinc-950 text-base">{heading}</h2>
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 transition"
+            className="text-zinc-400 hover:text-zinc-600 transition"
           >
             <X className="h-5 w-5" />
           </button>
@@ -338,17 +421,17 @@ function AccountPanel({ open, onClose, user, profile, onLogout, navigate, toast 
         {view === 'menu' && (
           <div className="flex-1 overflow-y-auto">
             {/* Profile summary */}
-            <div className="px-6 py-5 border-b border-slate-100">
+            <div className="px-6 py-5 border-b border-zinc-100">
               <div className="flex items-center gap-3">
-                <div className="h-11 w-11 rounded-full bg-slate-900 text-white flex items-center justify-center text-sm font-bold shrink-0">
+                <div className="h-11 w-11 rounded-full bg-indigo-600 text-white flex items-center justify-center text-sm font-semibold shrink-0">
                   {(profile?.name || user?.email || '?')
                     .split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()}
                 </div>
                 <div className="min-w-0">
-                  <p className="font-semibold text-slate-900 text-sm truncate">
+                  <p className="font-semibold text-zinc-900 text-sm truncate">
                     {profile?.name || '—'}
                   </p>
-                  <p className="text-xs text-slate-400 truncate">{user?.email}</p>
+                  <p className="text-xs text-zinc-400 truncate">{user?.email}</p>
                 </div>
               </div>
             </div>
@@ -365,7 +448,7 @@ function AccountPanel({ open, onClose, user, profile, onLogout, navigate, toast 
                 label="Account email"
                 sublabel={user?.email}
               />
-              <div className="pt-2 mt-2 border-t border-slate-100">
+              <div className="pt-2 mt-2 border-t border-zinc-100">
                 <PanelItem
                   icon={<LogOut className="h-4 w-4" />}
                   label="Sign out"
@@ -386,7 +469,7 @@ function AccountPanel({ open, onClose, user, profile, onLogout, navigate, toast 
         {view === 'name' && (
           <form onSubmit={handleSaveName} className="flex-1 flex flex-col px-6 py-6">
             <label className="block">
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+              <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">
                 Full name
               </span>
               <input
@@ -394,7 +477,7 @@ function AccountPanel({ open, onClose, user, profile, onLogout, navigate, toast 
                 value={name}
                 onChange={e => setName(e.target.value)}
                 placeholder="Your full name"
-                className="mt-2 w-full border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 focus:outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 transition"
+                className="mt-2 w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm text-zinc-900 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50 transition"
               />
             </label>
             {error && <p className="text-sm text-red-600 mt-3">{error}</p>}
@@ -402,14 +485,14 @@ function AccountPanel({ open, onClose, user, profile, onLogout, navigate, toast 
               <button
                 type="button"
                 onClick={() => setView('menu')}
-                className="flex-1 border border-slate-200 rounded-xl py-3 text-sm font-medium text-slate-600 hover:bg-slate-50 transition"
+                className="flex-1 border border-zinc-200 rounded-xl py-3 text-sm font-medium text-zinc-600 hover:bg-zinc-50 transition"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={busy}
-                className="flex-1 bg-slate-900 text-white rounded-xl py-3 text-sm font-semibold hover:bg-black transition disabled:opacity-50 flex items-center justify-center gap-2"
+                className="flex-1 bg-zinc-950 text-white rounded-xl py-3 text-sm font-semibold hover:bg-zinc-800 transition disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {busy ? <><Loader2 className="h-4 w-4 animate-spin" /> Saving…</> : 'Save'}
               </button>
@@ -437,7 +520,7 @@ function AccountPanel({ open, onClose, user, profile, onLogout, navigate, toast 
                 <div className="flex gap-3 mt-auto pt-6">
                   <button
                     onClick={() => setView('menu')}
-                    className="flex-1 border border-slate-200 rounded-xl py-3 text-sm font-medium text-slate-600 hover:bg-slate-50 transition"
+                    className="flex-1 border border-zinc-200 rounded-xl py-3 text-sm font-medium text-zinc-600 hover:bg-zinc-50 transition"
                   >
                     Keep account
                   </button>
@@ -453,12 +536,12 @@ function AccountPanel({ open, onClose, user, profile, onLogout, navigate, toast 
 
             {deleteStep === 2 && (
               <form onSubmit={handleDelete} className="flex flex-col flex-1">
-                <p className="text-sm text-slate-600 leading-relaxed mb-5">
+                <p className="text-sm text-zinc-600 leading-relaxed mb-5">
                   Enter your <strong>phone number</strong> to confirm deletion.
                   This is the phone number you use to sign in.
                 </p>
                 <label className="block">
-                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                  <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">
                     Phone number
                   </span>
                   <input
@@ -475,7 +558,7 @@ function AccountPanel({ open, onClose, user, profile, onLogout, navigate, toast 
                   <button
                     type="button"
                     onClick={() => setDeleteStep(1)}
-                    className="flex-1 border border-slate-200 rounded-xl py-3 text-sm font-medium text-slate-600 hover:bg-slate-50 transition"
+                    className="flex-1 border border-zinc-200 rounded-xl py-3 text-sm font-medium text-zinc-600 hover:bg-zinc-50 transition"
                   >
                     Back
                   </button>
@@ -500,22 +583,22 @@ function AccountPanel({ open, onClose, user, profile, onLogout, navigate, toast 
 
 function PanelItem({ icon, label, sublabel, onClick, destructive = false }) {
   const base = `w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm text-left transition
-    ${destructive ? 'text-red-600 hover:bg-red-50' : 'text-slate-700 hover:bg-slate-50'}
+    ${destructive ? 'text-red-600 hover:bg-red-50' : 'text-zinc-700 hover:bg-zinc-50'}
     ${!onClick ? 'cursor-default' : 'cursor-pointer'}`
 
   return (
     <button onClick={onClick} className={base} disabled={!onClick}>
-      <span className={`shrink-0 ${destructive ? 'text-red-400' : 'text-slate-400'}`}>
+      <span className={`shrink-0 ${destructive ? 'text-red-400' : 'text-zinc-400'}`}>
         {icon}
       </span>
       <div className="flex-1 min-w-0">
         <span className="font-medium">{label}</span>
         {sublabel && (
-          <p className="text-xs text-slate-400 truncate mt-0.5">{sublabel}</p>
+          <p className="text-xs text-zinc-400 truncate mt-0.5">{sublabel}</p>
         )}
       </div>
       {onClick && (
-        <ChevronRight className={`h-4 w-4 shrink-0 ${destructive ? 'text-red-300' : 'text-slate-300'}`} />
+        <ChevronRight className={`h-4 w-4 shrink-0 ${destructive ? 'text-red-300' : 'text-zinc-300'}`} />
       )}
     </button>
   )

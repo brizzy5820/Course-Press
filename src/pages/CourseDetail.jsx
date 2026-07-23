@@ -133,21 +133,15 @@ export default function CourseDetail() {
 
         {/* Hero */}
         <p className="font-mono text-xs uppercase tracking-[0.2em] text-zinc-500 mb-3">Course</p>
-        <h1 className="font-sans text-4xl font-semibold leading-tight text-black">{course.title}</h1>
+        <h1 className="font-sans text-2xl lg:text-4xl font-semibold leading-tight text-black">{course.title}</h1>
         <p className="text-lg text-zinc-600 mt-3 leading-relaxed">{course.subtitle}</p>
 
         {/* Stats */}
-        <div className="flex items-center gap-5 mt-5">
-          <span className="flex items-center gap-1.5 text-sm text-zinc-600">
-            <FileText className="h-4 w-4" /> {totalLessons} lessons
-          </span>
-          <span className="flex items-center gap-1.5 text-sm text-zinc-600">
-            <Clock className="h-4 w-4" /> Self-paced
-          </span>
-          <span className="flex items-center gap-1.5 text-sm text-zinc-600">
-            <CheckCircle2 className="h-4 w-4" /> Lifetime access
-          </span>
-        </div>
+         <div className="flex flex-wrap items-center gap-2 mt-6">
+            <StatPill icon={<FileText className="h-3.5 w-3.5" />} label={`${totalLessons} lessons`} />
+            <StatPill icon={<Clock className="h-3.5 w-3.5" />} label="Self-paced" />
+            <StatPill icon={<CheckCircle2 className="h-3.5 w-3.5" />} label="Lifetime access" />
+          </div>
 
         {/* Cover */}
         {course.coverImage && (
@@ -294,3 +288,11 @@ export default function CourseDetail() {
     </div>
   )
 }
+function StatPill({ icon, label }) {
+  return (
+    <span className="flex items-center gap-1.5 text-xs font-medium text-zinc-600 bg-white border border-zinc-200 rounded-full px-3 py-1.5">
+      {icon} {label}
+    </span>
+  )
+}
+ 
