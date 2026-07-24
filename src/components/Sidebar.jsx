@@ -23,19 +23,16 @@ export default function Sidebar({ course, activeLessonId, completedIds, onSelect
   return (
     <>
       {/* Mobile top bar — replaces the old floating button so it never overlaps page content */}
-      <div className="lg:hidden fixed inset-x-0 top-0 z-40 h-14 bg-zinc-950/95 backdrop-blur border-b border-white/[0.08] flex items-center gap-3 px-4">
+      <div className="lg:hidden fixed inset-x-0 top-0 z-40 h-14  backdrop-blur border-b border-white/[0.08] flex items-center gap-3 px-4">
         <button
           onClick={onToggle}
           aria-label="Toggle course contents"
           aria-expanded={open}
-          className="shrink-0 h-9 w-9 rounded-lg flex items-center justify-center text-zinc-300 hover:text-white hover:bg-white/[0.06] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60"
+          className="shrink-0 h-9 w-9 rounded-lg flex items-center justify-center text-black  hover:bg-white/[0.06] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60"
         >
           {open ? <X className="h-4.5 w-4.5" /> : <Menu className="h-4.5 w-4.5" />}
         </button>
-        <div className="min-w-0 flex-1">
-          <p className="text-[13px] font-semibold text-white truncate leading-tight">{course.title}</p>
-          <p className="text-[11px] text-zinc-500 leading-tight tabular-nums">{progressPercent}% complete</p>
-        </div>
+       
       </div>
 
       {/* Sidebar panel */}

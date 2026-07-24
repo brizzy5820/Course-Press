@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
-  BookOpen, LogOut, Trash2, ChevronRight,
+  BookOpen, LogOut, Trash2, ChevronRight, ChevronDown,
   CheckCircle2, Loader2, Pencil, X, User,
-  ArrowRight, GraduationCap, Clock, Search,
+  ArrowRight, GraduationCap, Clock, Search, Sun, Moon, ArrowLeft,
 } from 'lucide-react'
 import {
   reauthenticateWithCredential,
@@ -14,11 +14,22 @@ import {
 import { doc, updateDoc, deleteDoc } from 'firebase/firestore'
 import { auth, db } from '../firebase'
 import { useAuth } from '../contexts/AuthContext'
+import { useTheme } from '../contexts/ThemeContext'
 import { useToast } from '../contexts/ToastContext'
 import { listMyEnrollments, getCourse, getProgress, flattenLessons } from '../lib/data'
 
+// Normalize Nigerian phone numbers: +234/234 prefix → 0 prefix
+function normalizePhone(raw) {
+  let digits = raw.replace(/\D/g, '')
+  if (digits.startsWith('234') && digits.length >= 13) {
+    digits = '0' + digits.slice(3)
+  }
+  return digits
+}
+
 export default function Dashboard() {
   const { user, profile, logout } = useAuth()
+  const { theme, toggleTheme }    = useTheme()
   const toast                     = useToast()
   const navigate                  = useNavigate()
   const [items,       setItems]       = useState(null)
@@ -56,7 +67,6 @@ export default function Dashboard() {
   const initials = (profile?.name || user?.email || '?')
     .split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
 
-  // Counts drive the filter tabs — purely presentational, no change to data fetching.
   const counts = useMemo(() => {
     if (!items) return { all: 0, active: 0, done: 0 }
     return {
@@ -76,34 +86,48 @@ export default function Dashboard() {
   }, [items, filter, query])
 
   return (
-    <div className="min-h-screen bg-[#F7F8FA]">
+    <div className="min-h-screen bg-[#F7F8FA] dark:bg-neutral-950">
 
       {/* ── Header ── */}
-      <header className="bg-white/90 backdrop-blur-sm border-b border-zinc-200 sticky top-0 z-10">
+      <header className="bg-white/90 dark:bg-neutral-900/90 backdrop-blur-sm border-b border-neutral-200 dark:border-neutral-800 sticky top-0 z-10">
         <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2.5">
-            <span className=" font-bold text-zinc-950 text-[17px] tracking-tight">
-              CoursePress
-            </span>
-          </Link>
+          <div className="flex items-center gap-3">
+            {/* Back arrow */}
+            {window.history.length > 1 && (
+              <button
+                onClick={() => window.history.back()}
+                aria-label="Go back"
+                className="flex items-center justify-center h-8 w-8 rounded-full text-neutral-500 dark:text-neutral-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </button>
+            )}
+            <Link to="/" className="flex items-center gap-2.5">
+              <span className="font-bold text-neutral-950 dark:text-white text-[17px] tracking-tight">
+                CoursePress
+              </span>
+            </Link>
+          </div>
 
           <div className="flex items-center gap-1">
             <Link
               to="/"
-              className="hidden sm:flex items-center gap-1.5 text-sm font-medium text-zinc-500 hover:text-zinc-900 transition px-3 py-2 rounded-lg hover:bg-zinc-100"
+              className="hidden sm:flex items-center gap-1.5 text-sm font-medium text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white transition px-3 py-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800"
             >
               <BookOpen className="h-4 w-4" /> Browse
             </Link>
             <button
               onClick={() => setAccountOpen(true)}
-              className="flex items-center gap-2.5 rounded-full border border-zinc-200 pl-3 pr-1.5 py-1.5 hover:border-zinc-300 hover:bg-white transition group ml-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40"
+              className="flex items-center gap-2 rounded-full border border-neutral-200 dark:border-neutral-700 pl-3 pr-1.5 py-1.5 hover:border-neutral-300 dark:hover:border-neutral-600 hover:bg-white dark:hover:bg-neutral-800 transition group ml-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/40"
             >
-              <span className="text-sm font-medium text-zinc-600 max-w-[160px] truncate hidden sm:block group-hover:text-zinc-900 transition">
+              <span className="text-sm font-medium text-neutral-600 dark:text-neutral-300 max-w-[160px] truncate hidden sm:block group-hover:text-neutral-900 dark:group-hover:text-white transition">
                 {profile?.name || user?.email}
               </span>
-              <div className="h-7 w-7 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs font-semibold shrink-0">
+              <div className="h-7 w-7 rounded-full bg-black text-white dark:bg-amber-500 dark:text-black flex items-center justify-center text-xs font-semibold shrink-0">
                 {initials}
               </div>
+              {/* Chevron collapse indicator */}
+              <ChevronDown className="h-3.5 w-3.5 text-neutral-400 shrink-0" />
             </button>
           </div>
         </div>
@@ -115,11 +139,11 @@ export default function Dashboard() {
         {/* Page title + search */}
         <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-5 mb-8">
           <div>
-            <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-indigo-600 mb-2">library</p>
-            <h1 className=" text-2xl font-semibold text-zinc-950 tracking-tight">
+            <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-amber-600 mb-2">library</p>
+            <h1 className="text-2xl font-semibold text-neutral-950 dark:text-white tracking-tight">
               {items?.length ? 'Continue learning' : 'My library'}
             </h1>
-            <p className="text-zinc-500 text-sm mt-1.5">
+            <p className="text-neutral-500 dark:text-neutral-400 text-sm mt-1.5">
               {items === null
                 ? ''
                 : items.length === 0
@@ -130,18 +154,18 @@ export default function Dashboard() {
 
           {items && items.length > 0 && (
             <div className="relative w-full sm:w-56">
-              <Search className="h-3.5 w-3.5 text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <Search className="h-3.5 w-3.5 text-neutral-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
                 value={query}
                 onChange={e => setQuery(e.target.value)}
                 placeholder="Search your courses"
-                className="w-full bg-white border border-zinc-200 rounded-lg pl-9 pr-3 py-2 text-sm text-zinc-800 placeholder:text-zinc-400 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50 transition"
+                className="w-full bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-lg pl-9 pr-3 py-2 text-sm text-neutral-800 dark:text-neutral-100 placeholder:text-neutral-400 focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-50 dark:focus:ring-amber-900/20 transition"
               />
             </div>
           )}
         </div>
 
-        {/* Filter tabs — quick way to jump between all / in-progress / completed */}
+        {/* Filter tabs */}
         {items && items.length > 0 && (
           <div className="flex items-center gap-1.5 mb-6">
             <Tab label="All"          count={counts.all}    active={filter === 'all'}    onClick={() => setFilter('all')} />
@@ -153,21 +177,21 @@ export default function Dashboard() {
         {/* Loading */}
         {items === null && (
           <div className="flex items-center justify-center py-32">
-            <Loader2 className="h-5 w-5 animate-spin text-zinc-300" />
+            <Loader2 className="h-5 w-5 animate-spin text-neutral-300" />
           </div>
         )}
 
         {/* Empty library */}
         {items?.length === 0 && (
-          <div className="bg-white border border-zinc-200 rounded-2xl p-14 text-center">
-            <div className="w-14 h-14 rounded-2xl bg-indigo-50 flex items-center justify-center mx-auto mb-4">
-              <GraduationCap className="h-7 w-7 text-indigo-500" />
+          <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl p-14 text-center">
+            <div className="w-14 h-14 rounded-2xl bg-amber-50 dark:bg-amber-900/20 flex items-center justify-center mx-auto mb-4">
+              <GraduationCap className="h-7 w-7 text-amber-500" />
             </div>
-            <p className="font-serif font-semibold text-lg text-zinc-900">No courses in your library</p>
-            <p className="text-sm text-zinc-500 mt-1.5">Browse the catalog and enroll to get started.</p>
+            <p className="font-semibold text-lg text-neutral-900 dark:text-white">No courses in your library</p>
+            <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1.5">Browse the catalog and enroll to get started.</p>
             <Link
               to="/"
-              className="inline-flex items-center gap-2 mt-6 bg-zinc-950 text-white rounded-xl px-5 py-2.5 text-sm font-semibold hover:bg-zinc-800 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40 focus-visible:ring-offset-2"
+              className="inline-flex items-center gap-2 mt-6 bg-black dark:bg-amber-500 text-white dark:text-black rounded-xl px-5 py-2.5 text-sm font-semibold hover:bg-neutral-800 dark:hover:bg-amber-400 transition"
             >
               Browse courses <ArrowRight className="h-4 w-4" />
             </Link>
@@ -177,7 +201,7 @@ export default function Dashboard() {
         {/* No search/filter results */}
         {items && items.length > 0 && visible.length === 0 && (
           <div className="text-center py-24">
-            <p className="text-zinc-500 text-sm">
+            <p className="text-neutral-500 dark:text-neutral-400 text-sm">
               {query ? `No courses match "${query}".` : 'Nothing here yet.'}
             </p>
           </div>
@@ -208,6 +232,8 @@ export default function Dashboard() {
         onLogout={handleLogout}
         navigate={navigate}
         toast={toast}
+        theme={theme}
+        toggleTheme={toggleTheme}
       />
     </div>
   )
@@ -219,8 +245,10 @@ function Tab({ label, count, active, onClick }) {
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-[13px] font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40
-        ${active ? 'bg-zinc-950 text-white' : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100'}`}
+      className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-[13px] font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/40
+        ${active
+          ? 'bg-black dark:bg-amber-500 text-white dark:text-black'
+          : 'text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800'}`}
     >
       {label}
       <span className="text-[11px] tabular-nums text-current opacity-60">{count}</span>
@@ -236,11 +264,11 @@ function CourseCard({ course, percent, completed, total }) {
 
   return (
     <Link
-      to={`/dashboard/${course.id}`}
-      className="group bg-white rounded-2xl border border-zinc-200 overflow-hidden hover:border-zinc-300 hover:shadow-[0_12px_32px_-12px_rgba(0,0,0,0.14)] hover:-translate-y-0.5 transition-all duration-300 flex flex-col"
+      to={`/courses/${course.id}`}
+      className="group bg-white dark:bg-neutral-900 rounded-2xl border border-neutral-200 dark:border-neutral-800 overflow-hidden hover:border-neutral-300 dark:hover:border-neutral-700 hover:shadow-[0_12px_32px_-12px_rgba(0,0,0,0.14)] hover:-translate-y-0.5 transition-all duration-300 flex flex-col"
     >
       {/* Cover */}
-      <div className="aspect-[16/9] bg-zinc-100 overflow-hidden relative">
+      <div className="aspect-[16/9] bg-neutral-100 dark:bg-neutral-800 overflow-hidden relative">
         {course.coverImage ? (
           <img
             src={course.coverImage}
@@ -249,7 +277,7 @@ function CourseCard({ course, percent, completed, total }) {
           />
         ) : (
           <div className="h-full w-full flex items-center justify-center">
-            <BookOpen className="h-9 w-9 text-zinc-300" />
+            <BookOpen className="h-9 w-9 text-neutral-300 dark:text-neutral-600" />
           </div>
         )}
         {isComplete && (
@@ -261,16 +289,16 @@ function CourseCard({ course, percent, completed, total }) {
 
       {/* Content */}
       <div className="p-5 flex flex-col flex-1">
-        <h3 className=" font-semibold text-zinc-950 text-[16px] leading-snug line-clamp-2">
+        <h3 className="font-semibold text-neutral-950 dark:text-white text-[16px] leading-snug line-clamp-2">
           {course.title}
         </h3>
         {course.subtitle && (
-          <p className="text-[13px] text-zinc-500 mt-1 line-clamp-1">{course.subtitle}</p>
+          <p className="text-[13px] text-neutral-500 dark:text-neutral-400 mt-1 line-clamp-1">{course.subtitle}</p>
         )}
 
         <div className="mt-auto pt-4">
           {/* Stats row */}
-          <div className="flex items-center gap-4 mb-3 text-xs text-zinc-400">
+          <div className="flex items-center gap-4 mb-3 text-xs text-neutral-400">
             <span className="flex items-center gap-1.5">
               <BookOpen className="h-3.5 w-3.5" />
               {total} lessons
@@ -284,18 +312,18 @@ function CourseCard({ course, percent, completed, total }) {
           {/* Progress bar */}
           <div>
             <div className="flex justify-between items-center mb-1.5">
-              <span className="text-xs text-zinc-400 font-medium">
+              <span className="text-xs text-neutral-400 font-medium">
                 {isComplete ? 'Completed' : isStarted ? 'In progress' : 'Not started'}
               </span>
               <span className={`text-xs font-semibold font-mono tabular-nums
-                ${isComplete ? 'text-emerald-600' : isStarted ? 'text-indigo-600' : 'text-zinc-400'}`}>
+                ${isComplete ? 'text-emerald-600' : isStarted ? 'text-amber-600' : 'text-neutral-400'}`}>
                 {percent}%
               </span>
             </div>
-            <div className="h-1.5 bg-zinc-100 rounded-full overflow-hidden">
+            <div className="h-1.5 bg-neutral-100 dark:bg-neutral-800 rounded-full overflow-hidden">
               <div
                 className={`h-full rounded-full transition-all duration-700
-                  ${isComplete ? 'bg-emerald-500' : 'bg-indigo-500'}`}
+                  ${isComplete ? 'bg-emerald-500' : 'bg-amber-500'}`}
                 style={{ width: `${percent}%` }}
               />
             </div>
@@ -303,11 +331,11 @@ function CourseCard({ course, percent, completed, total }) {
         </div>
 
         {/* CTA row */}
-        <div className="flex items-center justify-between mt-4 pt-4 border-t border-zinc-100">
-          <span className="text-xs font-semibold text-zinc-400 group-hover:text-zinc-900 transition">
+        <div className="flex items-center justify-between mt-4 pt-4 border-t border-neutral-100 dark:border-neutral-800">
+          <span className="text-xs font-semibold text-neutral-400 group-hover:text-neutral-900 dark:group-hover:text-white transition">
             {isComplete ? 'Review course' : isStarted ? 'Continue' : 'Start learning'}
           </span>
-          <ChevronRight className="h-4 w-4 text-zinc-300 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition" />
+          <ChevronRight className="h-4 w-4 text-neutral-300 group-hover:text-amber-500 group-hover:translate-x-0.5 transition" />
         </div>
       </div>
     </Link>
@@ -316,7 +344,7 @@ function CourseCard({ course, percent, completed, total }) {
 
 // ── Account panel ────────────────────────────────────────────────────────────
 
-function AccountPanel({ open, onClose, user, profile, onLogout, navigate, toast }) {
+function AccountPanel({ open, onClose, user, profile, onLogout, navigate, toast, theme, toggleTheme }) {
   const [view,       setView]       = useState('menu')
   const [name,       setName]       = useState('')
   const [phone,      setPhone]      = useState('')
@@ -358,10 +386,8 @@ function AccountPanel({ open, onClose, user, profile, onLogout, navigate, toast 
     if (!phone.trim()) return setError('Enter your phone number to confirm.')
     setBusy(true)
     try {
-      const credential = EmailAuthProvider.credential(
-        user.email,
-        phone.replace(/\D/g, '')
-      )
+      const cleanPhone = normalizePhone(phone)
+      const credential = EmailAuthProvider.credential(user.email, cleanPhone)
       await reauthenticateWithCredential(auth.currentUser, credential)
       await deleteDoc(doc(db, 'users', user.uid))
       await deleteUser(auth.currentUser)
@@ -389,30 +415,24 @@ function AccountPanel({ open, onClose, user, profile, onLogout, navigate, toast 
 
   return (
     <>
-      <div
-        onClick={onClose}
-        className="fixed inset-0 bg-zinc-950/30 z-40 backdrop-blur-[2px]"
-      />
+      <div onClick={onClose} className="fixed inset-0 bg-black/30 z-40 backdrop-blur-[2px]" />
 
-      <div className="fixed inset-y-0 right-0 z-50 w-full max-w-[340px] bg-white shadow-2xl flex flex-col">
+      <div className="fixed inset-y-0 right-0 z-50 w-full max-w-[340px] bg-white dark:bg-neutral-900 shadow-2xl flex flex-col">
 
         {/* Panel header */}
-        <div className="flex items-center justify-between px-6 py-5 border-b border-zinc-100">
+        <div className="flex items-center justify-between px-6 py-5 border-b border-neutral-100 dark:border-neutral-800">
           <div className="flex items-center gap-2">
             {view !== 'menu' && (
               <button
                 onClick={() => { setView('menu'); setError('') }}
-                className="text-zinc-400 hover:text-zinc-600 transition mr-1"
+                className="text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 transition mr-1"
               >
                 <ChevronRight className="h-4 w-4 rotate-180" />
               </button>
             )}
-            <h2 className="font-semibold text-zinc-950 text-base">{heading}</h2>
+            <h2 className="font-semibold text-neutral-950 dark:text-white text-base">{heading}</h2>
           </div>
-          <button
-            onClick={onClose}
-            className="text-zinc-400 hover:text-zinc-600 transition"
-          >
+          <button onClick={onClose} className="text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 transition">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -421,17 +441,17 @@ function AccountPanel({ open, onClose, user, profile, onLogout, navigate, toast 
         {view === 'menu' && (
           <div className="flex-1 overflow-y-auto">
             {/* Profile summary */}
-            <div className="px-6 py-5 border-b border-zinc-100">
+            <div className="px-6 py-5 border-b border-neutral-100 dark:border-neutral-800">
               <div className="flex items-center gap-3">
-                <div className="h-11 w-11 rounded-full bg-indigo-600 text-white flex items-center justify-center text-sm font-semibold shrink-0">
+                <div className="h-11 w-11 rounded-full bg-black dark:bg-amber-500 text-white dark:text-black flex items-center justify-center text-sm font-semibold shrink-0">
                   {(profile?.name || user?.email || '?')
                     .split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()}
                 </div>
                 <div className="min-w-0">
-                  <p className="font-semibold text-zinc-900 text-sm truncate">
+                  <p className="font-semibold text-neutral-900 dark:text-white text-sm truncate">
                     {profile?.name || '—'}
                   </p>
-                  <p className="text-xs text-zinc-400 truncate">{user?.email}</p>
+                  <p className="text-xs text-neutral-400 truncate">{user?.email}</p>
                 </div>
               </div>
             </div>
@@ -448,7 +468,14 @@ function AccountPanel({ open, onClose, user, profile, onLogout, navigate, toast 
                 label="Account email"
                 sublabel={user?.email}
               />
-              <div className="pt-2 mt-2 border-t border-zinc-100">
+              {/* Theme toggle */}
+              <PanelItem
+                icon={theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                label={`Theme: ${theme === 'dark' ? 'Dark' : 'Light'}`}
+                sublabel="Toggle app theme"
+                onClick={toggleTheme}
+              />
+              <div className="pt-2 mt-2 border-t border-neutral-100 dark:border-neutral-800">
                 <PanelItem
                   icon={<LogOut className="h-4 w-4" />}
                   label="Sign out"
@@ -469,7 +496,7 @@ function AccountPanel({ open, onClose, user, profile, onLogout, navigate, toast 
         {view === 'name' && (
           <form onSubmit={handleSaveName} className="flex-1 flex flex-col px-6 py-6">
             <label className="block">
-              <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">
+              <span className="text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wide">
                 Full name
               </span>
               <input
@@ -477,7 +504,7 @@ function AccountPanel({ open, onClose, user, profile, onLogout, navigate, toast 
                 value={name}
                 onChange={e => setName(e.target.value)}
                 placeholder="Your full name"
-                className="mt-2 w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm text-zinc-900 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50 transition"
+                className="mt-2 w-full border border-neutral-200 dark:border-neutral-700 rounded-xl px-4 py-3 text-sm text-neutral-900 dark:text-white bg-white dark:bg-neutral-800 focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-50 dark:focus:ring-amber-900/20 transition"
               />
             </label>
             {error && <p className="text-sm text-red-600 mt-3">{error}</p>}
@@ -485,14 +512,14 @@ function AccountPanel({ open, onClose, user, profile, onLogout, navigate, toast 
               <button
                 type="button"
                 onClick={() => setView('menu')}
-                className="flex-1 border border-zinc-200 rounded-xl py-3 text-sm font-medium text-zinc-600 hover:bg-zinc-50 transition"
+                className="flex-1 border border-neutral-200 dark:border-neutral-700 rounded-xl py-3 text-sm font-medium text-neutral-600 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800 transition"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={busy}
-                className="flex-1 bg-zinc-950 text-white rounded-xl py-3 text-sm font-semibold hover:bg-zinc-800 transition disabled:opacity-50 flex items-center justify-center gap-2"
+                className="flex-1 bg-black dark:bg-amber-500 text-white dark:text-black rounded-xl py-3 text-sm font-semibold hover:bg-neutral-800 dark:hover:bg-amber-400 transition disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {busy ? <><Loader2 className="h-4 w-4 animate-spin" /> Saving…</> : 'Save'}
               </button>
@@ -505,12 +532,12 @@ function AccountPanel({ open, onClose, user, profile, onLogout, navigate, toast 
           <div className="flex-1 flex flex-col px-6 py-6 overflow-y-auto">
             {deleteStep === 1 && (
               <>
-                <div className="bg-red-50 border border-red-100 rounded-2xl p-5 space-y-3">
-                  <div className="flex items-center gap-2 text-red-700">
+                <div className="bg-red-50 dark:bg-red-950/30 border border-red-100 dark:border-red-900 rounded-2xl p-5 space-y-3">
+                  <div className="flex items-center gap-2 text-red-700 dark:text-red-400">
                     <Trash2 className="h-4 w-4 shrink-0" />
                     <p className="font-semibold text-sm">This is permanent</p>
                   </div>
-                  <ul className="text-xs text-red-600 space-y-1.5 list-disc list-inside leading-relaxed">
+                  <ul className="text-xs text-red-600 dark:text-red-400 space-y-1.5 list-disc list-inside leading-relaxed">
                     <li>Your account will be permanently deleted</li>
                     <li>All course access will be removed immediately</li>
                     <li>Your progress cannot be recovered</li>
@@ -520,7 +547,7 @@ function AccountPanel({ open, onClose, user, profile, onLogout, navigate, toast 
                 <div className="flex gap-3 mt-auto pt-6">
                   <button
                     onClick={() => setView('menu')}
-                    className="flex-1 border border-zinc-200 rounded-xl py-3 text-sm font-medium text-zinc-600 hover:bg-zinc-50 transition"
+                    className="flex-1 border border-neutral-200 dark:border-neutral-700 rounded-xl py-3 text-sm font-medium text-neutral-600 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800 transition"
                   >
                     Keep account
                   </button>
@@ -536,12 +563,12 @@ function AccountPanel({ open, onClose, user, profile, onLogout, navigate, toast 
 
             {deleteStep === 2 && (
               <form onSubmit={handleDelete} className="flex flex-col flex-1">
-                <p className="text-sm text-zinc-600 leading-relaxed mb-5">
+                <p className="text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed mb-5">
                   Enter your <strong>phone number</strong> to confirm deletion.
                   This is the phone number you use to sign in.
                 </p>
                 <label className="block">
-                  <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">
+                  <span className="text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wide">
                     Phone number
                   </span>
                   <input
@@ -549,8 +576,8 @@ function AccountPanel({ open, onClose, user, profile, onLogout, navigate, toast 
                     type="tel"
                     value={phone}
                     onChange={e => setPhone(e.target.value)}
-                    placeholder="08012345678"
-                    className="mt-2 w-full border border-red-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-red-400 focus:ring-2 focus:ring-red-50 transition"
+                    placeholder="08012345678 or +2348012345678"
+                    className="mt-2 w-full border border-red-200 dark:border-red-800 rounded-xl px-4 py-3 text-sm bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white focus:outline-none focus:border-red-400 focus:ring-2 focus:ring-red-50 dark:focus:ring-red-900/20 transition"
                   />
                 </label>
                 {error && <p className="text-sm text-red-600 mt-3">{error}</p>}
@@ -558,7 +585,7 @@ function AccountPanel({ open, onClose, user, profile, onLogout, navigate, toast 
                   <button
                     type="button"
                     onClick={() => setDeleteStep(1)}
-                    className="flex-1 border border-zinc-200 rounded-xl py-3 text-sm font-medium text-zinc-600 hover:bg-zinc-50 transition"
+                    className="flex-1 border border-neutral-200 dark:border-neutral-700 rounded-xl py-3 text-sm font-medium text-neutral-600 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800 transition"
                   >
                     Back
                   </button>
@@ -583,22 +610,24 @@ function AccountPanel({ open, onClose, user, profile, onLogout, navigate, toast 
 
 function PanelItem({ icon, label, sublabel, onClick, destructive = false }) {
   const base = `w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm text-left transition
-    ${destructive ? 'text-red-600 hover:bg-red-50' : 'text-zinc-700 hover:bg-zinc-50'}
+    ${destructive
+      ? 'text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30'
+      : 'text-neutral-700 dark:text-neutral-200 hover:bg-neutral-50 dark:hover:bg-neutral-800'}
     ${!onClick ? 'cursor-default' : 'cursor-pointer'}`
 
   return (
     <button onClick={onClick} className={base} disabled={!onClick}>
-      <span className={`shrink-0 ${destructive ? 'text-red-400' : 'text-zinc-400'}`}>
+      <span className={`shrink-0 ${destructive ? 'text-red-400' : 'text-neutral-400 dark:text-neutral-500'}`}>
         {icon}
       </span>
       <div className="flex-1 min-w-0">
         <span className="font-medium">{label}</span>
         {sublabel && (
-          <p className="text-xs text-zinc-400 truncate mt-0.5">{sublabel}</p>
+          <p className="text-xs text-neutral-400 truncate mt-0.5">{sublabel}</p>
         )}
       </div>
       {onClick && (
-        <ChevronRight className={`h-4 w-4 shrink-0 ${destructive ? 'text-red-300' : 'text-zinc-300'}`} />
+        <ChevronRight className={`h-4 w-4 shrink-0 ${destructive ? 'text-red-300' : 'text-neutral-300 dark:text-neutral-600'}`} />
       )}
     </button>
   )

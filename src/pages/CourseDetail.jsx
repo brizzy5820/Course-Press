@@ -8,6 +8,7 @@ import { doc, setDoc, serverTimestamp } from 'firebase/firestore'
 import {
   PlayCircle, FileText, Lock, Clock,
   CheckCircle2, ArrowRight, Loader2,
+  ChevronDown, ChevronRight, ExternalLink,
 } from 'lucide-react'
 import { auth, db } from '../firebase'
 import { getCourse, isEnrolled, createPendingOrder } from '../lib/data'
@@ -18,22 +19,83 @@ import {
 } from '../lib/access'
 import { useAuth } from '../contexts/AuthContext'
 
+function truncateHalf(text = '') {
+  if (!text) return ''
+  const half = Math.ceil(text.length / 2)
+  return text.length > half ? text.slice(0, half).trimEnd() + '…' : text
+}
+
+function SoundwaveBackground() {
+  const bars = Array.from({ length: 72 })
+  return (
+    <div className="absolute inset-x-0 top-0 h-[560px] overflow-hidden pointer-events-none">
+      <svg
+        className="w-full h-full"
+        viewBox="0 0 1440 560"
+        preserveAspectRatio="none"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <defs>
+          <linearGradient id="soundwaveGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+             <stop offset="0%" stopColor="#00000000" />
+            <stop offset="55%" stopColor="#3F3F4600" />
+            <stop offset="100%" stopColor="#A1A1AA" />
+           
+          </linearGradient>
+        </defs>
+        {bars.map((_, i) => {
+          const x = (i / bars.length) * 1440
+          const h =
+            50 +
+            Math.abs(Math.sin(i * 0.45)) * 220 +
+            Math.abs(Math.sin(i * 0.11)) * 90
+          const y = Math.max(0, (300 - h) / 2)
+          return (
+            <rect
+              key={i}
+              x={x}
+              y={y}
+              width="8"
+              height={h}
+              rx="4"
+              fill="url(#soundwaveGradient)"
+              opacity="0.9"
+            />
+          )
+        })}
+      </svg>
+      <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#F7F8FA]/70 to-[#F7F8FA]" />
+    </div>
+  )
+}
+
 export default function CourseDetail() {
   const { courseId } = useParams()
   const navigate     = useNavigate()
   const { user }     = useAuth()
 
-  const [course,     setCourse]     = useState(null)
-  const [enrolled,   setEnrolled]   = useState(false)
-  const [form,       setForm]       = useState({ name: '', email: '', phone: '' })
-  const [submitting, setSubmitting] = useState(false)
-  const [error,      setError]      = useState('')
-  const [paid,       setPaid]       = useState(false)
+  const [course,      setCourse]      = useState(null)
+  const [enrolled,    setEnrolled]    = useState(false)
+  const [form,        setForm]        = useState({ name: '', email: '', phone: '' })
+  const [submitting,  setSubmitting]  = useState(false)
+  const [error,       setError]       = useState('')
+  const [paid,        setPaid]        = useState(false)
+
+  // accordion state
+  const [openModules, setOpenModules] = useState(() => new Set())
+  const [openLessons, setOpenLessons] = useState(() => new Set())
 
   useEffect(() => { getCourse(courseId).then(setCourse) }, [courseId])
   useEffect(() => {
     if (user && courseId) isEnrolled(user.uid, courseId).then(setEnrolled)
   }, [user, courseId])
+
+  // open the first module by default once the course loads
+  useEffect(() => {
+    if (course?.curriculum?.length) {
+      setOpenModules(new Set([course.curriculum[0].id]))
+    }
+  }, [course])
 
   if (!course) return (
     <div className="min-h-screen bg-[#F7F8FA] flex items-center justify-center">
@@ -43,6 +105,26 @@ export default function CourseDetail() {
 
   function setField(key) {
     return e => setForm(f => ({ ...f, [key]: e.target.value }))
+  }
+
+  function toggleModule(id) {
+    setOpenModules(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  function toggleLesson(id) {
+    setOpenLessons(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  function goToLesson(lesson) {
+    navigate(`/dashboard/${courseId}?lesson=${lesson.id}`)
   }
 
   async function handlePay(e) {
@@ -108,186 +190,279 @@ export default function CourseDetail() {
   const totalLessons = (course.curriculum || []).reduce((s, m) => s + (m.lessons?.length || 0), 0)
 
   return (
-    <div className="min-h-screen bg-[#F7F8FA]">
+    <div className="min-h-screen bg-[#F7F8FA] relative overflow-hidden">
+      <SoundwaveBackground />
 
-      {/* Header */}
-      <header className="bg-white border-b border-zinc-200 backdrop-blur sticky top-0 z-10">
-        <div className="max-w-3xl mx-auto px-6 py-4 flex items-center justify-between">
-          <Link to="/" className="font-bold text-black text-lg tracking-tight">CoursePress</Link>
-          {user ? (
-            <Link to="/dashboard" className="text-sm font-medium text-zinc-600 hover:text-black transition flex items-center gap-1.5">
-              My library <ArrowRight className="h-3.5 w-3.5" />
-            </Link>
-          ) : (
-            <Link
-              to="/login"
-              className="text-sm font-semibold text-black hover:text-black transition"
-            >
-              Sign in
-            </Link>
-          )}
-        </div>
-      </header>
+      <div className="relative z-10">
+        {/* Header */}
+        <header className="bg-white border-b border-zinc-200 backdrop-blur sticky top-0 z-10">
+          <div className="max-w-3xl mx-auto px-6 py-4 flex items-center justify-between">
+            <Link to="/" className="font-bold text-black text-lg tracking-tight">CoursePress</Link>
+            {user ? (
+              <Link to="/dashboard" className="text-sm font-medium text-zinc-600 hover:text-black transition flex items-center gap-1.5">
+                My library <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            ) : (
+              <Link
+                to="/login"
+                className="text-sm font-semibold text-black hover:text-black transition"
+              >
+                Sign in
+              </Link>
+            )}
+          </div>
+        </header>
 
-      <main className="max-w-3xl mx-auto px-6 py-12">
+        <main className="max-w-3xl mx-auto px-6 py-12">
 
-        {/* Hero */}
-        <p className="font-mono text-xs uppercase tracking-[0.2em] text-zinc-500 mb-3">Course</p>
-        <h1 className="font-sans text-2xl lg:text-4xl font-semibold leading-tight text-black">{course.title}</h1>
-        <p className="text-lg text-zinc-600 mt-3 leading-relaxed">{course.subtitle}</p>
+          {/* Hero */}
+          <p className="font-mono text-xs uppercase tracking-[0.2em] text-zinc-500 mb-3">Course</p>
+          <h1 className="font-sans text-2xl lg:text-4xl font-semibold leading-tight text-black">{course.title}</h1>
+          <p className="text-lg text-zinc-600 mt-3 leading-relaxed">{course.subtitle}</p>
 
-        {/* Stats */}
-         <div className="flex flex-wrap items-center gap-2 mt-6">
+          {/* Stats */}
+          <div className="flex flex-wrap items-center gap-2 mt-6">
             <StatPill icon={<FileText className="h-3.5 w-3.5" />} label={`${totalLessons} lessons`} />
             <StatPill icon={<Clock className="h-3.5 w-3.5" />} label="Self-paced" />
             <StatPill icon={<CheckCircle2 className="h-3.5 w-3.5" />} label="Lifetime access" />
           </div>
 
-        {/* Cover */}
-        {course.coverImage && (
-          <img
-            src={course.coverImage}
-            alt={course.title}
-            className="w-full rounded-2xl mt-8 aspect-[16/9] object-cover shadow-sm"
-          />
-        )}
+          {/* Cover */}
+          {course.coverImage && (
+            <img
+              src={course.coverImage}
+              alt={course.title}
+              className="w-full rounded-2xl mt-8 aspect-[16/9] object-cover shadow-sm"
+            />
+          )}
 
-        {/* Description */}
-        {course.description && (
-          <div className="prose-reader mt-8 text-black/80 whitespace-pre-line leading-[1.85] text-[1.02rem]">
-            {course.description}
-          </div>
-        )}
-
-        {/* Curriculum */}
-        <h2 className="font-sans text-2xl font-semibold mt-12 mb-4 text-black">What's inside</h2>
-        <div className="space-y-3">
-          {(course.curriculum || []).map((mod, mi) => (
-            <div key={mod.id} className="border border-zinc-200 rounded-xl overflow-hidden bg-white">
-              <div className="px-5 py-3 bg-zinc-100 flex items-center gap-2">
-                <span className="font-mono text-[10px] text-zinc-500 uppercase tracking-wider">Module {mi + 1}</span>
-                <span className="text-zinc-300">·</span>
-                <span className="text-sm font-semibold text-black">{mod.title}</span>
-                <span className="ml-auto font-mono text-xs text-zinc-500">{mod.lessons?.length || 0} lessons</span>
-              </div>
-              <ul className="divide-y divide-zinc-100">
-                {(mod.lessons || []).map((lesson, li) => (
-                  <li key={lesson.id} className="px-5 py-3 flex items-center justify-between gap-3 text-sm">
-                    <span className="flex items-center gap-2.5 min-w-0">
-                      <span className="font-mono text-[10px] text-zinc-500 shrink-0 w-6">{mi + 1}.{li + 1}</span>
-                      {lesson.type === 'video'
-                        ? <PlayCircle className="h-3.5 w-3.5 text-zinc-700 shrink-0" />
-                        : <FileText   className="h-3.5 w-3.5 text-zinc-700 shrink-0" />}
-                      <span className="text-black truncate">{lesson.title}</span>
-                    </span>
-                    <span className="flex items-center gap-2 shrink-0">
-                      {!enrolled && <Lock className="h-3 w-3 text-zinc-400" />}
-                      {lesson.durationMin && (
-                        <span className="font-mono text-xs text-zinc-500">{lesson.durationMin}m</span>
-                      )}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
-
-        {/* CTA */}
-        <div id="checkout" className="mt-14 border-t border-zinc-200 pt-10">
-          {enrolled ? (
-            <button
-              onClick={() => navigate(`/dashboard/${courseId}`)}
-              className="w-full bg-black text-white rounded-xl py-4 font-semibold hover:bg-zinc-800 transition flex items-center justify-center gap-2"
-            >
-              Open course <ArrowRight className="h-4 w-4" />
-            </button>
-
-          ) : paid ? (
-            <div className="bg-zinc-100 border border-zinc-300 rounded-2xl p-7 text-center space-y-3">
-              <div className="w-12 h-12 rounded-full bg-zinc-200 flex items-center justify-center mx-auto">
-                <CheckCircle2 className="h-6 w-6 text-black" />
-              </div>
-              <p className="font-display text-xl font-semibold text-black">Payment received!</p>
-              <p className="text-zinc-600 text-sm leading-relaxed">
-                Your access is ready. Sign in with{' '}
-                <strong className="text-black">{form.email}</strong> and your phone number.
-              </p>
-              <button
-                onClick={() => navigate(`/login?redirect=${courseId}`)}
-                className="inline-flex items-center gap-2 mt-2 bg-black text-white rounded-lg px-6 py-2.5 font-semibold hover:bg-zinc-800 transition text-sm"
-              >
-                Sign in now <ArrowRight className="h-4 w-4" />
-              </button>
-            </div>
-
-          ) : (
-            <div className="bg-white border border-zinc-200 rounded-2xl p-6 shadow-sm">
-              <div className="flex items-baseline justify-between mb-6">
-                <h3 className="font-display text-xl font-semibold text-black">Get instant access</h3>
-                <span className="font-bold text-2xl text-black">
-                  {course.price ? `₦${Number(course.price).toLocaleString()}` : 'Free'}
-                </span>
-              </div>
-
-              <form onSubmit={handlePay} className="space-y-3">
-                <input
-                  required
-                  placeholder="Full name"
-                  value={form.name}
-                  onChange={setField('name')}
-                  className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm text-black focus:outline-none focus:border-black focus:ring-1 focus:ring-black/10 transition"
-                />
-                <input
-                  required
-                  type="email"
-                  placeholder="Email address"
-                  value={form.email}
-                  onChange={setField('email')}
-                  className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm text-black focus:outline-none focus:border-black focus:ring-1 focus:ring-black/10 transition"
-                />
-                <div>
-                  <input
-                    required
-                    type="tel"
-                    placeholder="Phone number (e.g. 08012345678)"
-                    value={form.phone}
-                    onChange={setField('phone')}
-                    className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm text-black focus:outline-none focus:border-black focus:ring-1 focus:ring-black/10 transition"
-                  />
-                  <p className="text-xs text-zinc-500 mt-2 ml-1 flex items-center gap-1.5">
-                    <Lock className="h-3 w-3" />
-                    Your phone number becomes your sign-in password — remember it.
-                  </p>
-                </div>
-
-                {error && (
-                  <div className="bg-zinc-100 border border-zinc-300 rounded-xl px-4 py-3 text-sm text-black">
-                    {error}
-                  </div>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="w-full bg-black text-white rounded-xl py-3.5 font-semibold hover:bg-zinc-800 transition disabled:opacity-60 flex items-center justify-center gap-2 mt-2"
-                >
-                  {submitting
-                    ? <><Loader2 className="h-4 w-4 animate-spin" /> Opening checkout…</>
-                    : 'Pay with card or bank transfer'}
-                </button>
-
-                <p className="text-xs text-zinc-500 text-center pt-1">
-                  New accounts are opened instantly the moment payment clears.
-                </p>
-              </form>
+          {/* Description */}
+          {course.description && (
+            <div className="prose-reader mt-8 text-black/80 whitespace-pre-line leading-[1.85] text-[1.02rem]">
+              {course.description}
             </div>
           )}
-        </div>
-      </main>
+
+          {/* Curriculum */}
+          <h2 className="font-sans text-2xl font-semibold mt-12 mb-4 text-black">What's inside</h2>
+          <div className="space-y-3">
+            {(course.curriculum || []).map((mod, mi) => {
+              const modOpen = openModules.has(mod.id)
+              return (
+                <div key={mod.id} className="border border-zinc-200 rounded-xl overflow-hidden bg-white">
+                  {/* Module header — accordion toggle */}
+                  <button
+                    type="button"
+                    onClick={() => toggleModule(mod.id)}
+                    className="w-full px-5 py-3 bg-zinc-100 flex items-center gap-2 text-left hover:bg-zinc-150 transition"
+                  >
+                    {modOpen
+                      ? <ChevronDown className="h-3.5 w-3.5 text-zinc-500 shrink-0" />
+                      : <ChevronRight className="h-3.5 w-3.5 text-zinc-500 shrink-0" />}
+                    <span className="font-mono text-[10px] text-zinc-500 uppercase tracking-wider shrink-0">Module {mi + 1}</span>
+                    <span className="text-zinc-300">·</span>
+                    <span className="text-sm font-semibold text-black truncate">{mod.title}</span>
+                    <span className="ml-auto font-mono text-xs text-zinc-500 shrink-0">{mod.lessons?.length || 0} lessons</span>
+                  </button>
+
+                  {modOpen && (
+                    <ul className="divide-y divide-zinc-100">
+                      {(mod.lessons || []).map((lesson, li) => {
+                        const isVideo    = lesson.type === 'video'
+                        const isText     = lesson.type === 'text'
+                        const expandable = enrolled && (isVideo || isText)
+                        const lessonOpen = openLessons.has(lesson.id)
+
+                        return (
+                          <li key={lesson.id} className="text-sm">
+                            {/* Lesson row — its own toggle (the "subset" accordion) */}
+                            <button
+                              type="button"
+                              onClick={expandable ? () => toggleLesson(lesson.id) : undefined}
+                              className={`w-full px-5 py-3 flex items-center justify-between gap-3 text-left ${expandable ? 'hover:bg-zinc-50 cursor-pointer' : 'cursor-default'} transition`}
+                            >
+                              <span className="flex items-center gap-2.5 min-w-0">
+                                {expandable ? (
+                                  lessonOpen
+                                    ? <ChevronDown className="h-3 w-3 text-zinc-400 shrink-0" />
+                                    : <ChevronRight className="h-3 w-3 text-zinc-400 shrink-0" />
+                                ) : (
+                                  <span className="w-3 shrink-0" />
+                                )}
+                                <span className="font-mono text-[10px] text-zinc-500 shrink-0 w-6">{mi + 1}.{li + 1}</span>
+                                {isVideo
+                                  ? <PlayCircle className="h-3.5 w-3.5 text-zinc-700 shrink-0" />
+                                  : <FileText   className="h-3.5 w-3.5 text-zinc-700 shrink-0" />}
+                                <span className="text-black truncate">{lesson.title}</span>
+                              </span>
+                              <span className="flex items-center gap-2 shrink-0">
+                                {!enrolled && <Lock className="h-3 w-3 text-zinc-400" />}
+                                {lesson.durationMin && (
+                                  <span className="font-mono text-xs text-zinc-500">{lesson.durationMin}m</span>
+                                )}
+                              </span>
+                            </button>
+
+                            {/* Expanded panel */}
+                            {expandable && lessonOpen && (
+                              <div className="px-5 pb-5 pt-1">
+                                {isVideo && (
+                                  <div className="w-full">
+                                    {lesson.videoUrl ? (
+                                      <video
+                                        controls
+                                        preload="metadata"
+                                        poster={lesson.thumbnail || undefined}
+                                        className="w-full rounded-lg bg-black aspect-video"
+                                      >
+                                        <source src={lesson.videoUrl} />
+                                        Your browser doesn't support embedded video.
+                                      </video>
+                                    ) : lesson.embedUrl ? (
+                                      <iframe
+                                        src={lesson.embedUrl}
+                                        className="w-full aspect-video rounded-lg border-0"
+                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                        allowFullScreen
+                                      />
+                                    ) : (
+                                      <div className="w-full aspect-video rounded-lg bg-zinc-900 flex items-center justify-center">
+                                        <PlayCircle className="h-9 w-9 text-white/60" />
+                                      </div>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={() => goToLesson(lesson)}
+                                      className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-zinc-600 hover:text-black transition"
+                                    >
+                                      Full view <ExternalLink className="h-3 w-3" />
+                                    </button>
+                                  </div>
+                                )}
+
+                                {isText && lesson.content && (
+                                  <div>
+                                    <p className="text-xs text-zinc-600 leading-relaxed">
+                                      {truncateHalf(lesson.content)}
+                                    </p>
+                                    <button
+                                      type="button"
+                                      onClick={() => goToLesson(lesson)}
+                                      className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-zinc-600 hover:text-black transition"
+                                    >
+                                      Full view <ExternalLink className="h-3 w-3" />
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+
+          {/* CTA */}
+          <div id="checkout" className="mt-14 border-t border-zinc-200 pt-10">
+            {enrolled ? (
+              <button
+                onClick={() => navigate(`/dashboard/${courseId}`)}
+                className="w-full bg-black text-white rounded-xl py-4 font-semibold hover:bg-zinc-800 transition flex items-center justify-center gap-2"
+              >
+                Open course <ArrowRight className="h-4 w-4" />
+              </button>
+
+            ) : paid ? (
+              <div className="bg-zinc-100 border border-zinc-300 rounded-2xl p-7 text-center space-y-3">
+                <div className="w-12 h-12 rounded-full bg-zinc-200 flex items-center justify-center mx-auto">
+                  <CheckCircle2 className="h-6 w-6 text-black" />
+                </div>
+                <p className="font-display text-xl font-semibold text-black">Payment received!</p>
+                <p className="text-zinc-600 text-sm leading-relaxed">
+                  Your access is ready. Sign in with{' '}
+                  <strong className="text-black">{form.email}</strong> and your phone number.
+                </p>
+                <button
+                  onClick={() => navigate(`/login?redirect=${courseId}`)}
+                  className="inline-flex items-center gap-2 mt-2 bg-black text-white rounded-lg px-6 py-2.5 font-semibold hover:bg-zinc-800 transition text-sm"
+                >
+                  Sign in now <ArrowRight className="h-4 w-4" />
+                </button>
+              </div>
+
+            ) : (
+              <div className="bg-white border border-zinc-200 rounded-2xl p-6 shadow-sm">
+                <div className="flex items-baseline justify-between mb-6">
+                  <h3 className="font-display text-xl font-semibold text-black">Get instant access</h3>
+                  <span className="font-bold text-2xl text-black">
+                    {course.price ? `₦${Number(course.price).toLocaleString()}` : 'Free'}
+                  </span>
+                </div>
+
+                <form onSubmit={handlePay} className="space-y-3">
+                  <input
+                    required
+                    placeholder="Full name"
+                    value={form.name}
+                    onChange={setField('name')}
+                    className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm text-black focus:outline-none focus:border-black focus:ring-1 focus:ring-black/10 transition"
+                  />
+                  <input
+                    required
+                    type="email"
+                    placeholder="Email address"
+                    value={form.email}
+                    onChange={setField('email')}
+                    className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm text-black focus:outline-none focus:border-black focus:ring-1 focus:ring-black/10 transition"
+                  />
+                  <div>
+                    <input
+                      required
+                      type="tel"
+                      placeholder="Phone number (e.g. 08012345678)"
+                      value={form.phone}
+                      onChange={setField('phone')}
+                      className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm text-black focus:outline-none focus:border-black focus:ring-1 focus:ring-black/10 transition"
+                    />
+                    <p className="text-xs text-zinc-500 mt-2 ml-1 flex items-center gap-1.5">
+                      <Lock className="h-3 w-3" />
+                      Your phone number becomes your sign-in password — remember it.
+                    </p>
+                  </div>
+
+                  {error && (
+                    <div className="bg-zinc-100 border border-zinc-300 rounded-xl px-4 py-3 text-sm text-black">
+                      {error}
+                    </div>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="w-full bg-black text-white rounded-xl py-3.5 font-semibold hover:bg-zinc-800 transition disabled:opacity-60 flex items-center justify-center gap-2 mt-2"
+                  >
+                    {submitting
+                      ? <><Loader2 className="h-4 w-4 animate-spin" /> Opening checkout…</>
+                      : 'Pay with card or bank transfer'}
+                  </button>
+
+                  <p className="text-xs text-zinc-500 text-center pt-1">
+                    New accounts are opened instantly the moment payment clears.
+                  </p>
+                </form>
+              </div>
+            )}
+          </div>
+        </main>
+      </div>
     </div>
   )
 }
+
 function StatPill({ icon, label }) {
   return (
     <span className="flex items-center gap-1.5 text-xs font-medium text-zinc-600 bg-white border border-zinc-200 rounded-full px-3 py-1.5">
@@ -295,4 +470,3 @@ function StatPill({ icon, label }) {
     </span>
   )
 }
- 
