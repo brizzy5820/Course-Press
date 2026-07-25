@@ -191,7 +191,7 @@ export default function CourseDetail() {
 
   return (
     <div className="min-h-screen bg-[#F7F8FA] relative overflow-hidden">
-      <SoundwaveBackground />
+     
 
       <div className="relative z-10">
         {/* Header */}

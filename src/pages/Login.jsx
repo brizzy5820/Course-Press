@@ -1,4 +1,4 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   signInWithEmailAndPassword,
@@ -148,13 +148,14 @@ export default function Login() {
     const em = email.trim()
     const ph = normalizePhone(phone)
     if (!em || !validateEmail(em)) return fail('Enter a valid email address.')
-    if (ph.length < 6)             return fail('Phone number must be at least 6 digits.')
+    if (ph.length < 11)             return fail('Phone number must be at least 11 digits.')
     setBusy(true)
     try {
       const cred = await signInWithEmailAndPassword(auth, em, ph)
       await activatePendingEnrollments(cred.user.uid, em)
       const snap = await getDoc(doc(db, 'users', cred.user.uid))
       const role = snap.data()?.role
+      
       navigate(role === 'admin' ? '/admin' : (redirectCourse ? `/dashboard/${redirectCourse}` : '/dashboard'), { replace: true })
     } catch (signInErr) {
       const isNotFound = ['auth/user-not-found','auth/invalid-credential','auth/invalid-email'].includes(signInErr.code)
