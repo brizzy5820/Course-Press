@@ -242,64 +242,127 @@ export default function AdminDashboard() {
             {courses?.map((c, i) => {
               const rowBusy = busy[c.id]
               return (
-                <div
-                  key={c.id}
-                  className="flex items-center justify-between px-5 py-4 hover:bg-zinc-50 transition-colors row-in"
-                  style={{ animationDelay: `${i * 40}ms` }}
-                >
-                  <div className="min-w-0">
-                    <p className="font-medium text-black truncate">{c.title}</p>
-                    <p className="text-xs text-zinc-500 mt-1 flex items-center gap-1.5">
-                      {c.published ? (
-                        <span className="flex items-center gap-1 text-amber-600 font-medium">
-                          <CheckCircle2 className="h-3 w-3" /> Published
-                        </span>
-                      ) : (
-                        <span className="flex items-center gap-1 text-zinc-400">
-                          <Circle className="h-3 w-3" /> Draft
-                        </span>
-                      )}
-                      <span className="text-zinc-300">·</span>
-                      <span>₦{Number(c.price || 0).toLocaleString()}</span>
-                    </p>
-                  </div>
+              <div
+  key={c.id}
+  className="flex flex-col md:flex-row md:items-center md:justify-between px-5 py-4 hover:bg-zinc-50 transition-colors row-in gap-3 md:gap-4"
+  style={{ animationDelay: `${i * 40}ms` }}
+>
+  {/* Left Content */}
+  <div className="min-w-0 flex-1">
 
-                  <div className="flex items-center gap-2 text-sm shrink-0">
-                    <button
-                      onClick={() => togglePublish(c)}
-                      disabled={!!rowBusy}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-zinc-600 hover:text-black hover:bg-zinc-100 transition disabled:opacity-50 disabled:pointer-events-none"
-                    >
-                      {rowBusy === 'publish' ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : c.published ? (
-                        <Circle className="h-3.5 w-3.5" />
-                      ) : (
-                        <CheckCircle2 className="h-3.5 w-3.5" />
-                      )}
-                      {rowBusy === 'publish'
-                        ? 'Working…'
-                        : c.published ? 'Unpublish' : 'Publish'}
-                    </button>
+    {/* Title */}
+    <p className="font-medium text-black truncate whitespace-nowrap">
+      {c.title}
+    </p>
 
-                    <Link
-                      to={`/admin/courses/${c.id}`}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-zinc-600 hover:text-black hover:bg-zinc-100 transition"
-                    >
-                      <Pencil className="h-3.5 w-3.5" /> Edit
-                    </Link>
+    {/* Mobile Actions */}
+    <div className="flex md:hidden items-center gap-2 mt-3 flex-wrap">
+      <button
+        onClick={() => togglePublish(c)}
+        disabled={!!rowBusy}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-zinc-600 hover:text-black hover:bg-zinc-100 transition disabled:opacity-50 disabled:pointer-events-none"
+      >
+        {rowBusy === 'publish' ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        ) : c.published ? (
+          <Circle className="h-3.5 w-3.5" />
+        ) : (
+          <CheckCircle2 className="h-3.5 w-3.5" />
+        )}
 
-                    <button
-                      onClick={() => setDeleteTarget(c)}
-                      disabled={!!rowBusy}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-zinc-400 hover:text-black hover:bg-zinc-100 transition disabled:opacity-50 disabled:pointer-events-none"
-                    >
-                      {rowBusy === 'delete'
-                        ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        : <Trash2 className="h-3.5 w-3.5" />}
-                    </button>
-                  </div>
-                </div>
+        {rowBusy === 'publish'
+          ? 'Working…'
+          : c.published
+          ? 'Unpublish'
+          : 'Publish'}
+      </button>
+
+      <Link
+        to={`/admin/courses/${c.id}`}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-zinc-600 hover:text-black hover:bg-zinc-100 transition"
+      >
+        <Pencil className="h-3.5 w-3.5" />
+        Edit
+      </Link>
+
+      <button
+        onClick={() => setDeleteTarget(c)}
+        disabled={!!rowBusy}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-zinc-400 hover:text-black hover:bg-zinc-100 transition disabled:opacity-50 disabled:pointer-events-none"
+      >
+        {rowBusy === 'delete' ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        ) : (
+          <Trash2 className="h-3.5 w-3.5" />
+        )}
+      </button>
+    </div>
+
+    {/* Status & Price */}
+    <p className="text-xs text-zinc-500 mt-3 flex items-center gap-2 flex-wrap">
+      {c.published ? (
+        <span className="flex items-center gap-1 text-amber-600 font-medium">
+          <CheckCircle2 className="h-3 w-3" />
+          Published
+        </span>
+      ) : (
+        <span className="flex items-center gap-1 text-zinc-400">
+          <Circle className="h-3 w-3" />
+          Draft
+        </span>
+      )}
+
+      <span className="text-zinc-300">•</span>
+
+      <span className="font-medium text-zinc-700">
+        ₦{Number(c.price || 0).toLocaleString()}
+      </span>
+    </p>
+  </div>
+
+  {/* Desktop Actions */}
+  <div className="hidden md:flex items-center gap-2 text-sm shrink-0">
+    <button
+      onClick={() => togglePublish(c)}
+      disabled={!!rowBusy}
+      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-zinc-600 hover:text-black hover:bg-zinc-100 transition disabled:opacity-50 disabled:pointer-events-none"
+    >
+      {rowBusy === 'publish' ? (
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+      ) : c.published ? (
+        <Circle className="h-3.5 w-3.5" />
+      ) : (
+        <CheckCircle2 className="h-3.5 w-3.5" />
+      )}
+
+      {rowBusy === 'publish'
+        ? 'Working…'
+        : c.published
+        ? 'Unpublish'
+        : 'Publish'}
+    </button>
+
+    <Link
+      to={`/admin/courses/${c.id}`}
+      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-zinc-600 hover:text-black hover:bg-zinc-100 transition"
+    >
+      <Pencil className="h-3.5 w-3.5" />
+      Edit
+    </Link>
+
+    <button
+      onClick={() => setDeleteTarget(c)}
+      disabled={!!rowBusy}
+      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-zinc-400 hover:text-black hover:bg-zinc-100 transition disabled:opacity-50 disabled:pointer-events-none"
+    >
+      {rowBusy === 'delete' ? (
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+      ) : (
+        <Trash2 className="h-3.5 w-3.5" />
+      )}
+    </button>
+  </div>
+</div>
               )
             })}
           </div>

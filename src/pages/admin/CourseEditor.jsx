@@ -195,7 +195,7 @@ export default function CourseEditor() {
           <Field label="Description">
             <textarea rows={5} value={course.description} onChange={e => set({ description: e.target.value })} className="editor-input" />
           </Field>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <Field label="Price (₦)">
               <input type="number" value={course.price} onChange={e => set({ price: Number(e.target.value) })} className="editor-input" />
             </Field>
