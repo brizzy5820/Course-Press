@@ -276,7 +276,6 @@ export default function AdminDashboard() {
           ? 'Unpublish'
           : 'Publish'}
       </button>
-
       <Link
         to={`/admin/courses/${c.id}`}
         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-zinc-600 hover:text-black hover:bg-zinc-100 transition"

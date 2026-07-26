@@ -18,6 +18,8 @@ import {
   activatePendingEnrollments,
 } from '../lib/access'
 import { useAuth } from '../contexts/AuthContext'
+import { useTheme } from '../contexts/ThemeContext'
+import VideoPlayer from '../components/VideoPlayer'
 
 function truncateHalf(text = '') {
   if (!text) return ''
@@ -73,6 +75,8 @@ export default function CourseDetail() {
   const { courseId } = useParams()
   const navigate     = useNavigate()
   const { user }     = useAuth()
+  const { theme }    = useTheme()
+  const isDark       = theme === 'dark'
 
   const [course,      setCourse]      = useState(null)
   const [enrolled,    setEnrolled]    = useState(false)
@@ -97,8 +101,19 @@ export default function CourseDetail() {
     }
   }, [course])
 
+  useEffect(() => {
+    const scrollKey = `scrollPos-${courseId}`
+    const scrollPos = sessionStorage.getItem(scrollKey)
+    if (scrollPos && course) {
+      setTimeout(() => {
+        window.scrollTo(0, parseInt(scrollPos, 10))
+        sessionStorage.removeItem(scrollKey)
+      }, 50)
+    }
+  }, [course, courseId])
+
   if (!course) return (
-    <div className="min-h-screen bg-[#F7F8FA] flex items-center justify-center">
+    <div className={`min-h-screen flex items-center justify-center ${isDark ? 'bg-neutral-950' : 'bg-[#F7F8FA]'}`}>
       <Loader2 className="h-6 w-6 animate-spin text-zinc-500" />
     </div>
   )
@@ -124,6 +139,7 @@ export default function CourseDetail() {
   }
 
   function goToLesson(lesson) {
+    sessionStorage.setItem(`scrollPos-${courseId}`, window.scrollY.toString())
     navigate(`/dashboard/${courseId}?lesson=${lesson.id}`)
   }
 
@@ -190,22 +206,24 @@ export default function CourseDetail() {
   const totalLessons = (course.curriculum || []).reduce((s, m) => s + (m.lessons?.length || 0), 0)
 
   return (
-    <div className="min-h-screen bg-[#F7F8FA] relative overflow-hidden">
-     
+    <div className={`min-h-screen relative overflow-hidden transition-colors duration-200 ${isDark ? 'bg-neutral-950' : 'bg-[#F7F8FA]'}`}>
 
       <div className="relative z-10">
-        {/* Header */}
-        <header className="bg-white border-b border-zinc-200 backdrop-blur sticky top-0 z-10">
-          <div className="max-w-3xl mx-auto px-6 py-4 flex items-center justify-between">
-            <Link to="/" className="font-bold text-black text-lg tracking-tight">CoursePress</Link>
+        {/* Header — matches dashboard style */}
+        <header className={`backdrop-blur-sm border-b sticky top-0 z-10 transition-colors duration-200
+          ${isDark ? 'bg-neutral-900/90 border-neutral-800' : 'bg-white/90 border-zinc-200'}`}>
+          <div className="max-w-3xl mx-auto px-6 h-16 flex items-center justify-between">
+            <Link to="/" className={`font-bold text-[17px] tracking-tight transition
+              ${isDark ? 'text-white' : 'text-black'}`}>CoursePress</Link>
             {user ? (
-              <Link to="/dashboard" className="text-sm font-medium text-zinc-600 hover:text-black transition flex items-center gap-1.5">
+              <Link to="/dashboard" className={`text-sm font-medium transition flex items-center gap-1.5
+                ${isDark ? 'text-neutral-400 hover:text-white' : 'text-zinc-600 hover:text-black'}`}>
                 My library <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             ) : (
               <Link
                 to="/login"
-                className="text-sm font-semibold text-black hover:text-black transition"
+                className={`text-sm font-semibold transition ${isDark ? 'text-neutral-300 hover:text-white' : 'text-black hover:text-black'}`}
               >
                 Sign in
               </Link>
@@ -216,15 +234,15 @@ export default function CourseDetail() {
         <main className="max-w-3xl mx-auto px-6 py-12">
 
           {/* Hero */}
-          <p className="font-mono text-xs uppercase tracking-[0.2em] text-zinc-500 mb-3">Course</p>
-          <h1 className="font-sans text-2xl lg:text-4xl font-semibold leading-tight text-black">{course.title}</h1>
-          <p className="text-lg text-zinc-600 mt-3 leading-relaxed">{course.subtitle}</p>
+          <p className={`font-mono text-xs uppercase tracking-[0.2em] mb-3 ${isDark ? 'text-neutral-500' : 'text-amber-600'}`}>Course</p>
+          <h1 className={`font-sans text-2xl lg:text-4xl font-semibold leading-tight ${isDark ? 'text-white' : 'text-black'}`}>{course.title}</h1>
+          <p className={`text-lg mt-3 leading-relaxed ${isDark ? 'text-neutral-400' : 'text-zinc-600'}`}>{course.subtitle}</p>
 
           {/* Stats */}
           <div className="flex flex-wrap items-center gap-2 mt-6">
-            <StatPill icon={<FileText className="h-3.5 w-3.5" />} label={`${totalLessons} lessons`} />
-            <StatPill icon={<Clock className="h-3.5 w-3.5" />} label="Self-paced" />
-            <StatPill icon={<CheckCircle2 className="h-3.5 w-3.5" />} label="Lifetime access" />
+            <StatPill icon={<FileText className="h-3.5 w-3.5" />} label={`${totalLessons} lessons`} isDark={isDark} />
+            <StatPill icon={<Clock className="h-3.5 w-3.5" />} label="Self-paced" isDark={isDark} />
+            <StatPill icon={<CheckCircle2 className="h-3.5 w-3.5" />} label="Lifetime access" isDark={isDark} />
           </div>
 
           {/* Cover */}
@@ -238,35 +256,36 @@ export default function CourseDetail() {
 
           {/* Description */}
           {course.description && (
-            <div className="prose-reader mt-8 text-black/80 whitespace-pre-line leading-[1.85] text-[1.02rem]">
+            <div className={`prose-reader mt-8 whitespace-pre-line leading-[1.85] text-[1.02rem] ${isDark ? 'text-neutral-300' : 'text-black/80'}`}>
               {course.description}
             </div>
           )}
 
           {/* Curriculum */}
-          <h2 className="font-sans text-2xl font-semibold mt-12 mb-4 text-black">What's inside</h2>
+          <h2 className={`font-sans text-2xl font-semibold mt-12 mb-4 ${isDark ? 'text-white' : 'text-black'}`}>What's inside</h2>
           <div className="space-y-3">
             {(course.curriculum || []).map((mod, mi) => {
               const modOpen = openModules.has(mod.id)
               return (
-                <div key={mod.id} className="border border-zinc-200 rounded-xl overflow-hidden bg-white">
+                <div key={mod.id} className={`border rounded-xl overflow-hidden ${isDark ? 'border-neutral-800 bg-neutral-900' : 'border-zinc-200 bg-white'}`}>
                   {/* Module header — accordion toggle */}
                   <button
                     type="button"
                     onClick={() => toggleModule(mod.id)}
-                    className="w-full px-5 py-3 bg-zinc-100 flex items-center gap-2 text-left hover:bg-zinc-150 transition"
+                    className={`w-full px-5 py-3 flex items-center gap-2 text-left transition
+                      ${isDark ? 'bg-neutral-800 hover:bg-neutral-750' : 'bg-zinc-100 hover:bg-zinc-150'}`}
                   >
                     {modOpen
-                      ? <ChevronDown className="h-3.5 w-3.5 text-zinc-500 shrink-0" />
-                      : <ChevronRight className="h-3.5 w-3.5 text-zinc-500 shrink-0" />}
-                    <span className="font-mono text-[10px] text-zinc-500 uppercase tracking-wider shrink-0">Module {mi + 1}</span>
-                    <span className="text-zinc-300">·</span>
-                    <span className="text-sm font-semibold text-black truncate">{mod.title}</span>
-                    <span className="ml-auto font-mono text-xs text-zinc-500 shrink-0">{mod.lessons?.length || 0} lessons</span>
+                      ? <ChevronDown className={`h-3.5 w-3.5 shrink-0 ${isDark ? 'text-neutral-400' : 'text-zinc-500'}`} />
+                      : <ChevronRight className={`h-3.5 w-3.5 shrink-0 ${isDark ? 'text-neutral-400' : 'text-zinc-500'}`} />}
+                    <span className={`font-mono text-[10px] uppercase tracking-wider shrink-0 ${isDark ? 'text-neutral-400' : 'text-zinc-500'}`}>Module {mi + 1}</span>
+                    <span className={isDark ? 'text-neutral-700' : 'text-zinc-300'}>·</span>
+                    <span className={`text-sm font-semibold truncate ${isDark ? 'text-white' : 'text-black'}`}>{mod.title}</span>
+                    <span className={`ml-auto font-mono text-xs shrink-0 ${isDark ? 'text-neutral-400' : 'text-zinc-500'}`}>{mod.lessons?.length || 0} lessons</span>
                   </button>
 
                   {modOpen && (
-                    <ul className="divide-y divide-zinc-100">
+                    <ul className={`divide-y ${isDark ? 'divide-neutral-800' : 'divide-zinc-100'}`}>
                       {(mod.lessons || []).map((lesson, li) => {
                         const isVideo    = lesson.type === 'video'
                         const isText     = lesson.type === 'text'
@@ -275,37 +294,38 @@ export default function CourseDetail() {
 
                         return (
                           <li key={lesson.id} className="text-sm">
-                            {/* Lesson row — its own toggle (the "subset" accordion) */}
+                            {/* Lesson row */}
                             <button
                               type="button"
                               onClick={expandable ? () => toggleLesson(lesson.id) : undefined}
-                              className={`w-full px-5 py-3 flex items-center justify-between gap-3 text-left ${expandable ? 'hover:bg-zinc-50 cursor-pointer' : 'cursor-default'} transition`}
+                              className={`w-full px-5 py-3 flex items-center justify-between gap-3 text-left ${expandable ? 'cursor-pointer' : 'cursor-default'} transition
+                                ${expandable ? isDark ? 'hover:bg-neutral-800' : 'hover:bg-zinc-50' : ''}`}
                             >
                               <span className="flex items-center gap-2.5 min-w-0">
                                 {expandable ? (
                                   lessonOpen
-                                    ? <ChevronDown className="h-3 w-3 text-zinc-400 shrink-0" />
-                                    : <ChevronRight className="h-3 w-3 text-zinc-400 shrink-0" />
+                                    ? <ChevronDown className={`h-3 w-3 shrink-0 ${isDark ? 'text-neutral-500' : 'text-zinc-400'}`} />
+                                    : <ChevronRight className={`h-3 w-3 shrink-0 ${isDark ? 'text-neutral-500' : 'text-zinc-400'}`} />
                                 ) : (
                                   <span className="w-3 shrink-0" />
                                 )}
-                                <span className="font-mono text-[10px] text-zinc-500 shrink-0 w-6">{mi + 1}.{li + 1}</span>
+                                <span className={`font-mono text-[10px] shrink-0 w-6 ${isDark ? 'text-neutral-500' : 'text-zinc-500'}`}>{mi + 1}.{li + 1}</span>
                                 {isVideo
-                                  ? <PlayCircle className="h-3.5 w-3.5 text-zinc-700 shrink-0" />
-                                  : <FileText   className="h-3.5 w-3.5 text-zinc-700 shrink-0" />}
-                                <span className="text-black truncate">{lesson.title}</span>
+                                  ? <PlayCircle className={`h-3.5 w-3.5 shrink-0 ${isDark ? 'text-neutral-300' : 'text-zinc-700'}`} />
+                                  : <FileText   className={`h-3.5 w-3.5 shrink-0 ${isDark ? 'text-neutral-300' : 'text-zinc-700'}`} />}
+                                <span className={`truncate ${isDark ? 'text-neutral-100' : 'text-black'}`}>{lesson.title}</span>
                               </span>
                               <span className="flex items-center gap-2 shrink-0">
-                                {!enrolled && <Lock className="h-3 w-3 text-zinc-400" />}
+                                {!enrolled && <Lock className={`h-3 w-3 ${isDark ? 'text-neutral-500' : 'text-zinc-400'}`} />}
                                 {lesson.durationMin && (
-                                  <span className="font-mono text-xs text-zinc-500">{lesson.durationMin}m</span>
+                                  <span className={`font-mono text-xs ${isDark ? 'text-neutral-500' : 'text-zinc-500'}`}>{lesson.durationMin}m</span>
                                 )}
                               </span>
                             </button>
 
                             {/* Expanded panel */}
                             {expandable && lessonOpen && (
-                              <div className="px-5 pb-5 pt-1">
+                              <div className={`px-5 pb-5 pt-1 ${isDark ? 'bg-neutral-900' : ''}`}>
                                 {isVideo && (
                                   <div className="w-full">
                                     {lesson.videoUrl ? (
@@ -313,7 +333,7 @@ export default function CourseDetail() {
                                         controls
                                         preload="metadata"
                                         poster={lesson.thumbnail || undefined}
-                                        className="w-full rounded-lg bg-black aspect-video"
+                                        className={`w-full rounded-lg aspect-video ${isDark ? 'bg-neutral-950' : 'bg-black'}`}
                                       >
                                         <source src={lesson.videoUrl} />
                                         Your browser doesn't support embedded video.
@@ -325,15 +345,18 @@ export default function CourseDetail() {
                                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                                         allowFullScreen
                                       />
+                                    ) : lesson.youtubeId ? (
+                                      <VideoPlayer youtubeId={lesson.youtubeId} onEnded={() => {}} />
                                     ) : (
-                                      <div className="w-full aspect-video rounded-lg bg-zinc-900 flex items-center justify-center">
+                                      <div className={`w-full aspect-video rounded-lg flex items-center justify-center ${isDark ? 'bg-neutral-800' : 'bg-zinc-900'}`}>
                                         <PlayCircle className="h-9 w-9 text-white/60" />
                                       </div>
                                     )}
                                     <button
                                       type="button"
                                       onClick={() => goToLesson(lesson)}
-                                      className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-zinc-600 hover:text-black transition"
+                                      className={`mt-2 inline-flex items-center gap-1.5 text-xs font-medium transition
+                                        ${isDark ? 'text-neutral-400 hover:text-white' : 'text-zinc-600 hover:text-black'}`}
                                     >
                                       Full view <ExternalLink className="h-3 w-3" />
                                     </button>
@@ -342,13 +365,14 @@ export default function CourseDetail() {
 
                                 {isText && lesson.content && (
                                   <div>
-                                    <p className="text-xs text-zinc-600 leading-relaxed">
+                                    <p className={`text-xs leading-relaxed ${isDark ? 'text-neutral-400' : 'text-zinc-600'}`}>
                                       {truncateHalf(lesson.content)}
                                     </p>
                                     <button
                                       type="button"
                                       onClick={() => goToLesson(lesson)}
-                                      className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-zinc-600 hover:text-black transition"
+                                      className={`mt-2 inline-flex items-center gap-1.5 text-xs font-medium transition
+                                        ${isDark ? 'text-neutral-400 hover:text-white' : 'text-zinc-600 hover:text-black'}`}
                                     >
                                       Full view <ExternalLink className="h-3 w-3" />
                                     </button>
@@ -367,38 +391,40 @@ export default function CourseDetail() {
           </div>
 
           {/* CTA */}
-          <div id="checkout" className="mt-14 border-t border-zinc-200 pt-10">
+          <div id="checkout" className={`mt-14 border-t pt-10 ${isDark ? 'border-neutral-800' : 'border-amber-200'}`}>
             {enrolled ? (
               <button
                 onClick={() => navigate(`/dashboard/${courseId}`)}
-                className="w-full bg-black text-white rounded-xl py-4 font-semibold hover:bg-zinc-800 transition flex items-center justify-center gap-2"
+                className={`w-full rounded-xl py-4 font-semibold transition flex items-center justify-center gap-2
+                  ${isDark ? 'bg-amber-500 text-black hover:bg-amber-400' : 'bg-black text-white hover:bg-amber-800'}`}
               >
                 Open course <ArrowRight className="h-4 w-4" />
               </button>
 
             ) : paid ? (
-              <div className="bg-zinc-100 border border-zinc-300 rounded-2xl p-7 text-center space-y-3">
-                <div className="w-12 h-12 rounded-full bg-zinc-200 flex items-center justify-center mx-auto">
-                  <CheckCircle2 className="h-6 w-6 text-black" />
+              <div className={`border rounded-2xl p-7 text-center space-y-3 ${isDark ? 'bg-neutral-900 border-neutral-700' : 'bg-zinc-100 border-zinc-300'}`}>
+                <div className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto ${isDark ? 'bg-neutral-800' : 'bg-zinc-200'}`}>
+                  <CheckCircle2 className={`h-6 w-6 ${isDark ? 'text-amber-500' : 'text-black'}`} />
                 </div>
-                <p className="font-display text-xl font-semibold text-black">Payment received!</p>
-                <p className="text-zinc-600 text-sm leading-relaxed">
+                <p className={`font-display text-xl font-semibold ${isDark ? 'text-white' : 'text-black'}`}>Payment received!</p>
+                <p className={`text-sm leading-relaxed ${isDark ? 'text-neutral-400' : 'text-zinc-600'}`}>
                   Your access is ready. Sign in with{' '}
-                  <strong className="text-black">{form.email}</strong> and your phone number.
+                  <strong className={isDark ? 'text-white' : 'text-black'}>{form.email}</strong> and your phone number.
                 </p>
                 <button
                   onClick={() => navigate(`/login?redirect=${courseId}`)}
-                  className="inline-flex items-center gap-2 mt-2 bg-black text-white rounded-lg px-6 py-2.5 font-semibold hover:bg-zinc-800 transition text-sm"
+                  className={`inline-flex items-center gap-2 mt-2 rounded-lg px-6 py-2.5 font-semibold transition text-sm
+                    ${isDark ? 'bg-amber-500 text-black hover:bg-amber-400' : 'bg-black text-white hover:bg-zinc-800'}`}
                 >
                   Sign in now <ArrowRight className="h-4 w-4" />
                 </button>
               </div>
 
             ) : (
-              <div className="bg-white border border-zinc-200 rounded-2xl p-6 shadow-sm">
+              <div className={`border rounded-2xl p-6 shadow-sm ${isDark ? 'bg-neutral-900 border-neutral-800' : 'bg-white border-zinc-200'}`}>
                 <div className="flex items-baseline justify-between mb-6">
-                  <h3 className="font-display text-xl font-semibold text-black">Get instant access</h3>
-                  <span className="font-bold text-2xl text-black">
+                  <h3 className={`font-display text-xl font-semibold ${isDark ? 'text-white' : 'text-black'}`}>Get instant access</h3>
+                  <span className={`font-bold text-2xl ${isDark ? 'text-white' : 'text-black'}`}>
                     {course.price ? `₦${Number(course.price).toLocaleString()}` : 'Free'}
                   </span>
                 </div>
@@ -409,7 +435,8 @@ export default function CourseDetail() {
                     placeholder="Full name"
                     value={form.name}
                     onChange={setField('name')}
-                    className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm text-black focus:outline-none focus:border-black focus:ring-1 focus:ring-black/10 transition"
+                    className={`w-full border rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-1 transition
+                      ${isDark ? 'bg-neutral-800 border-neutral-700 text-white focus:border-amber-500 focus:ring-amber-500/20' : 'bg-white border-zinc-200 text-black focus:border-black focus:ring-black/10'}`}
                   />
                   <input
                     required
@@ -417,7 +444,8 @@ export default function CourseDetail() {
                     placeholder="Email address"
                     value={form.email}
                     onChange={setField('email')}
-                    className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm text-black focus:outline-none focus:border-black focus:ring-1 focus:ring-black/10 transition"
+                    className={`w-full border rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-1 transition
+                      ${isDark ? 'bg-neutral-800 border-neutral-700 text-white focus:border-amber-500 focus:ring-amber-500/20' : 'bg-white border-zinc-200 text-black focus:border-black focus:ring-black/10'}`}
                   />
                   <div>
                     <input
@@ -426,16 +454,17 @@ export default function CourseDetail() {
                       placeholder="Phone number (e.g. 08012345678)"
                       value={form.phone}
                       onChange={setField('phone')}
-                      className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm text-black focus:outline-none focus:border-black focus:ring-1 focus:ring-black/10 transition"
+                      className={`w-full border rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-1 transition
+                        ${isDark ? 'bg-neutral-800 border-neutral-700 text-white focus:border-amber-500 focus:ring-amber-500/20' : 'bg-white border-zinc-200 text-black focus:border-black focus:ring-black/10'}`}
                     />
-                    <p className="text-xs text-zinc-500 mt-2 ml-1 flex items-center gap-1.5">
+                    <p className={`text-xs mt-2 ml-1 flex items-center gap-1.5 ${isDark ? 'text-neutral-500' : 'text-zinc-500'}`}>
                       <Lock className="h-3 w-3" />
                       Your phone number becomes your sign-in password — remember it.
                     </p>
                   </div>
 
                   {error && (
-                    <div className="bg-zinc-100 border border-zinc-300 rounded-xl px-4 py-3 text-sm text-black">
+                    <div className={`border rounded-xl px-4 py-3 text-sm ${isDark ? 'bg-neutral-800 border-neutral-700 text-neutral-300' : 'bg-zinc-100 border-zinc-300 text-black'}`}>
                       {error}
                     </div>
                   )}
@@ -443,14 +472,15 @@ export default function CourseDetail() {
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="w-full bg-black text-white rounded-xl py-3.5 font-semibold hover:bg-zinc-800 transition disabled:opacity-60 flex items-center justify-center gap-2 mt-2"
+                    className={`w-full rounded-xl py-3.5 font-semibold transition disabled:opacity-60 flex items-center justify-center gap-2 mt-2
+                      ${isDark ? 'bg-amber-500 text-black hover:bg-amber-400' : 'bg-black text-white hover:bg-zinc-800'}`}
                   >
                     {submitting
                       ? <><Loader2 className="h-4 w-4 animate-spin" /> Opening checkout…</>
                       : 'Pay with card or bank transfer'}
                   </button>
 
-                  <p className="text-xs text-zinc-500 text-center pt-1">
+                  <p className={`text-xs text-center pt-1 ${isDark ? 'text-neutral-500' : 'text-zinc-500'}`}>
                     New accounts are opened instantly the moment payment clears.
                   </p>
                 </form>
@@ -463,9 +493,10 @@ export default function CourseDetail() {
   )
 }
 
-function StatPill({ icon, label }) {
+function StatPill({ icon, label, isDark }) {
   return (
-    <span className="flex items-center gap-1.5 text-xs font-medium text-zinc-600 bg-white border border-zinc-200 rounded-full px-3 py-1.5">
+    <span className={`flex items-center gap-1.5 text-xs font-medium border rounded-full px-3 py-1.5
+      ${isDark ? 'text-neutral-400 bg-neutral-800 border-neutral-700' : 'text-zinc-600 bg-white border-zinc-200'}`}>
       {icon} {label}
     </span>
   )

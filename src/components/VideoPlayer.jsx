@@ -98,7 +98,7 @@ export default function VideoPlayer({ youtubeId: rawInput, onEnded }) {
       </div>
 
       {/* Controls */}
-      <div className="flex flex-wrap items-center gap-3 mt-3">
+      <div className="flex flex-wrap hidden items-center gap-3 mt-3">
         {/* Playback speed */}
         <div className="flex items-center bg-slate-100 rounded-lg p-0.5 gap-0.5">
           {RATES.map(r => (
