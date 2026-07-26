@@ -74,7 +74,7 @@ function SoundwaveBackground() {
 export default function CourseDetail() {
   const { courseId } = useParams()
   const navigate     = useNavigate()
-  const { user }     = useAuth()
+  const { user, profile } = useAuth()
   const { theme }    = useTheme()
   const isDark       = theme === 'dark'
 
@@ -146,11 +146,15 @@ export default function CourseDetail() {
   async function handlePay(e) {
     e.preventDefault()
     setError('')
-    if (!form.name || !form.email || !form.phone) {
-      setError('Please fill in all three fields.')
+    
+    const effectiveEmail = user ? user.email : form.email
+    const effectiveName = (user && profile?.name) ? profile.name : form.name
+    
+    if (!effectiveName || !effectiveEmail) {
+      setError('Please fill in all required fields.')
       return
     }
-    if (form.phone.replace(/\D/g, '').length < 6) {
+    if (!user && (!form.phone || form.phone.replace(/\D/g, '').length < 6)) {
       setError('Please enter a valid phone number — it will be used to sign in later.')
       return
     }
@@ -158,34 +162,39 @@ export default function CourseDetail() {
     try {
       const reference = `cp_${courseId}_${Date.now()}`
       await createPendingOrder({
-        name: form.name, email: form.email,
+        name: effectiveName, email: effectiveEmail,
         courseId, amount: course.price, reference,
       })
       const handler = window.PaystackPop.setup({
         key:      import.meta.env.VITE_PAYSTACK_PUBLIC_KEY,
-        email:    form.email,
+        email:    effectiveEmail,
         amount:   Math.round(course.price * 100),
         currency: course.currency || 'NGN',
         ref:      reference,
-        metadata: { name: form.name, courseId },
+        metadata: { name: effectiveName, courseId },
         callback: async function () {
           try {
-            const exists     = await accountExists(form.email)
-            const cleanPhone = form.phone.replace(/\D/g, '')
-            if (!exists) {
-              const cred = await createUserWithEmailAndPassword(auth, form.email, cleanPhone)
-              const uid  = cred.user.uid
-              await writeProfileAndEnrollment({ uid, name: form.name, email: form.email, courseId, source: 'paystack' })
-              await activatePendingEnrollments(uid, form.email)
+            if (user) {
+              await writeProfileAndEnrollment({ uid: user.uid, name: effectiveName, email: effectiveEmail, courseId, source: 'paystack' })
               navigate(`/dashboard/${courseId}`, { replace: true })
             } else {
-              await setDoc(doc(db, 'pendingEnrollments', `${form.email}_${courseId}`), {
-                name: form.name, email: form.email, courseId,
-                source: 'paystack', createdAt: serverTimestamp(),
-              })
-              await setDoc(doc(db, 'orders', reference), { status: 'paid' }, { merge: true })
-              setPaid(true)
-              setSubmitting(false)
+              const exists     = await accountExists(effectiveEmail)
+              const cleanPhone = form.phone.replace(/\D/g, '')
+              if (!exists) {
+                const cred = await createUserWithEmailAndPassword(auth, effectiveEmail, cleanPhone)
+                const uid  = cred.user.uid
+                await writeProfileAndEnrollment({ uid, name: effectiveName, email: effectiveEmail, courseId, source: 'paystack' })
+                await activatePendingEnrollments(uid, effectiveEmail)
+                navigate(`/dashboard/${courseId}`, { replace: true })
+              } else {
+                await setDoc(doc(db, 'pendingEnrollments', `${effectiveEmail}_${courseId}`), {
+                  name: effectiveName, email: effectiveEmail, courseId,
+                  source: 'paystack', createdAt: serverTimestamp(),
+                })
+                await setDoc(doc(db, 'orders', reference), { status: 'paid' }, { merge: true })
+                setPaid(true)
+                setSubmitting(false)
+              }
             }
           } catch (err) {
             console.error(err)
@@ -193,12 +202,14 @@ export default function CourseDetail() {
             setSubmitting(false)
           }
         },
-        onClose: function () { setSubmitting(false) },
+        onClose: function () {
+          setSubmitting(false)
+        },
       })
       handler.openIframe()
     } catch (err) {
       console.error(err)
-      setError('Something went wrong starting checkout. Please try again.')
+      setError('Failed to initiate payment. Please try again.')
       setSubmitting(false)
     }
   }
@@ -217,7 +228,7 @@ export default function CourseDetail() {
               ${isDark ? 'text-white' : 'text-black'}`}>CoursePress</Link>
             {user ? (
               <Link to="/dashboard" className={`text-sm font-medium transition flex items-center gap-1.5
-                ${isDark ? 'text-neutral-400 hover:text-white' : 'text-zinc-600 hover:text-black'}`}>
+                ${isDark ? 'text-neutral-400 hover:text-white' : 'text-amber-600 hover:text-black'}`}>
                 My library <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             ) : (
@@ -430,38 +441,44 @@ export default function CourseDetail() {
                 </div>
 
                 <form onSubmit={handlePay} className="space-y-3">
-                  <input
-                    required
-                    placeholder="Full name"
-                    value={form.name}
-                    onChange={setField('name')}
-                    className={`w-full border rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-1 transition
-                      ${isDark ? 'bg-neutral-800 border-neutral-700 text-white focus:border-amber-500 focus:ring-amber-500/20' : 'bg-white border-zinc-200 text-black focus:border-black focus:ring-black/10'}`}
-                  />
-                  <input
-                    required
-                    type="email"
-                    placeholder="Email address"
-                    value={form.email}
-                    onChange={setField('email')}
-                    className={`w-full border rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-1 transition
-                      ${isDark ? 'bg-neutral-800 border-neutral-700 text-white focus:border-amber-500 focus:ring-amber-500/20' : 'bg-white border-zinc-200 text-black focus:border-black focus:ring-black/10'}`}
-                  />
-                  <div>
+                  {!(user && profile?.name) && (
                     <input
                       required
-                      type="tel"
-                      placeholder="Phone number (e.g. 08012345678)"
-                      value={form.phone}
-                      onChange={setField('phone')}
+                      placeholder="Full name"
+                      value={form.name}
+                      onChange={setField('name')}
                       className={`w-full border rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-1 transition
                         ${isDark ? 'bg-neutral-800 border-neutral-700 text-white focus:border-amber-500 focus:ring-amber-500/20' : 'bg-white border-zinc-200 text-black focus:border-black focus:ring-black/10'}`}
                     />
-                    <p className={`text-xs mt-2 ml-1 flex items-center gap-1.5 ${isDark ? 'text-neutral-500' : 'text-zinc-500'}`}>
-                      <Lock className="h-3 w-3" />
-                      Your phone number becomes your sign-in password — remember it.
-                    </p>
-                  </div>
+                  )}
+                  {!user && (
+                    <>
+                      <input
+                        required
+                        type="email"
+                        placeholder="Email address"
+                        value={form.email}
+                        onChange={setField('email')}
+                        className={`w-full border rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-1 transition
+                          ${isDark ? 'bg-neutral-800 border-neutral-700 text-white focus:border-amber-500 focus:ring-amber-500/20' : 'bg-white border-zinc-200 text-black focus:border-black focus:ring-black/10'}`}
+                      />
+                      <div>
+                        <input
+                          required
+                          type="tel"
+                          placeholder="Phone number (e.g. 08012345678)"
+                          value={form.phone}
+                          onChange={setField('phone')}
+                          className={`w-full border rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-1 transition
+                            ${isDark ? 'bg-neutral-800 border-neutral-700 text-white focus:border-amber-500 focus:ring-amber-500/20' : 'bg-white border-zinc-200 text-black focus:border-black focus:ring-black/10'}`}
+                        />
+                        <p className={`text-xs mt-2 ml-1 flex items-center gap-1.5 ${isDark ? 'text-neutral-500' : 'text-zinc-500'}`}>
+                          <Lock className="h-3 w-3" />
+                          Your phone number becomes your sign-in password — remember it.
+                        </p>
+                      </div>
+                    </>
+                  )}
 
                   {error && (
                     <div className={`border rounded-xl px-4 py-3 text-sm ${isDark ? 'bg-neutral-800 border-neutral-700 text-neutral-300' : 'bg-zinc-100 border-zinc-300 text-black'}`}>
@@ -496,7 +513,7 @@ export default function CourseDetail() {
 function StatPill({ icon, label, isDark }) {
   return (
     <span className={`flex items-center gap-1.5 text-xs font-medium border rounded-full px-3 py-1.5
-      ${isDark ? 'text-neutral-400 bg-neutral-800 border-neutral-700' : 'text-zinc-600 bg-white border-zinc-200'}`}>
+      ${isDark ? 'text-neutral-400 bg-neutral-800 border-neutral-700' : 'text-white-600 bg-white border-amber-300'}`}>
       {icon} {label}
     </span>
   )

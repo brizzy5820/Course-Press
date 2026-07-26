@@ -93,7 +93,13 @@ export default function VideoPlayer({ youtubeId: rawInput, onEnded }) {
 
   return (
     <div>
-      <div className="aspect-video rounded-xl overflow-hidden bg-black shadow-lg">
+      <div className="relative aspect-video rounded-xl overflow-hidden bg-black shadow-lg">
+        {!ready && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900 z-10">
+            <div className="h-8 w-8 rounded-full border-2 border-amber-500 border-t-transparent animate-spin mb-2" />
+            <p className="text-xs text-zinc-400 font-medium">Loading video...</p>
+          </div>
+        )}
         <div ref={containerRef} className="h-full w-full" />
       </div>
 
