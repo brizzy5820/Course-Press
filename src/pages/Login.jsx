@@ -12,15 +12,37 @@ import { useAuth } from '../contexts/AuthContext'
 import { activatePendingEnrollments } from '../lib/access'
 
 function normalizePhone(raw) {
-  let digits = raw.replace(/\D/g, '')
-  // +2348012345678 or 2348012345678 → 08012345678
+  return raw.replace(/\D/g, '')
+}
+
+function buildPhoneCandidates(raw) {
+  const digits = normalizePhone(raw)
+  const candidates = [digits]
   if (digits.startsWith('234') && digits.length >= 13) {
-    digits = '0' + digits.slice(3)
+    candidates.push('0' + digits.slice(3))
   }
-  return digits
+  return [...new Set(candidates)]
 }
 
 const validateEmail = v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)
+
+const PHONE_DIGIT_COUNT_MIN = 6
+const PHONE_DIGIT_COUNT_MAX = 15
+const PHONE_DIGIT_SUM_MAX = 99
+
+const ERROR_CODES = {
+  invalidEmail: 'E101',
+  invalidPhone: 'E102',
+  phoneDigitSumExceeded: 'E103',
+  tooManyRequests: 'E104',
+  wrongPassword: 'E105',
+  emailAlreadyInUse: 'E106',
+  weakPhonePassword: 'E107',
+  signInFailed: 'E108',
+  resetUserNotFound: 'E201',
+  resetInvalidEmail: 'E202',
+  resetFailed: 'E203',
+}
 
 /* ─── Trust stats shown on the left panel ─────────────────────────────── */
 const STATS = [
@@ -129,63 +151,97 @@ export default function Login() {
   const [params]          = useSearchParams()
   const redirectCourse    = params.get('redirect')
 
-  const [email,   setEmail]   = useState('')
-  const [phone,   setPhone]   = useState('')
-  const [busy,    setBusy]    = useState(false)
-  const [error,   setError]   = useState('')
-  const [mode,    setMode]    = useState('login')
-  const [resetOk, setResetOk] = useState(false)
+  const [email,     setEmail]     = useState('')
+  const [phone,     setPhone]     = useState('')
+  const [busy,      setBusy]      = useState(false)
+  const [error,     setError]     = useState('')
+  const [errorCode, setErrorCode] = useState('')
+  const [mode,      setMode]      = useState('login')
+  const [resetOk,   setResetOk]   = useState(false)
 
   if (!loading && user) {
     return <Navigate to={isAdmin ? '/admin' : (redirectCourse ? `/dashboard/${redirectCourse}` : '/dashboard')} replace />
   }
 
-  function fail(msg) { setError(msg); setBusy(false) }
+  function fail(msg, code = '') { setError(msg); setErrorCode(code); setBusy(false) }
 
   async function handleSignIn(e) {
     e.preventDefault()
     setError('')
+    setErrorCode('')
     const em = email.trim()
-    const ph = normalizePhone(phone)
-    if (!em || !validateEmail(em)) return fail('Enter a valid email address.')
-    if (ph.length < 11)             return fail('Phone number must be at least 11 digits.')
+    const phoneCandidates = buildPhoneCandidates(phone)
+    const digitOnlyPhone = phoneCandidates[0]
+    if (!em || !validateEmail(em)) return fail('Enter a valid email address.', ERROR_CODES.invalidEmail)
+    if (!digitOnlyPhone || digitOnlyPhone.length < PHONE_DIGIT_COUNT_MIN || digitOnlyPhone.length > PHONE_DIGIT_COUNT_MAX) {
+      return fail(
+        `Enter a valid phone number with ${PHONE_DIGIT_COUNT_MIN}-${PHONE_DIGIT_COUNT_MAX} digits.`,
+        ERROR_CODES.invalidPhone
+      )
+    }
+    const phoneDigitSum = digitOnlyPhone.split('').reduce((sum, digit) => sum + Number(digit), 0)
+    if (phoneDigitSum > PHONE_DIGIT_SUM_MAX) {
+      return fail(
+        `Phone number digits sum must be ${PHONE_DIGIT_SUM_MAX} or less.`,
+        ERROR_CODES.phoneDigitSumExceeded
+      )
+    }
+
     setBusy(true)
-    try {
-      const cred = await signInWithEmailAndPassword(auth, em, ph)
-      await activatePendingEnrollments(cred.user.uid, em)
-      const snap = await getDoc(doc(db, 'users', cred.user.uid))
-      const role = snap.data()?.role
-      
-      navigate(role === 'admin' ? '/admin' : (redirectCourse ? `/dashboard/${redirectCourse}` : '/dashboard'), { replace: true })
-    } catch (signInErr) {
-      const isNotFound = ['auth/user-not-found','auth/invalid-credential','auth/invalid-email'].includes(signInErr.code)
-      if (signInErr.code === 'auth/too-many-requests')
-        return fail('Too many attempts. Please wait a few minutes and try again.')
-      if (signInErr.code === 'auth/wrong-password')
-        return fail('Incorrect phone number. Use "Forgot password" if you need to reset it.')
-      if (isNotFound) {
-        try {
-          const cred = await createUserWithEmailAndPassword(auth, em, ph)
-          await activatePendingEnrollments(cred.user.uid, em)
-          const snap = await getDoc(doc(db, 'users', cred.user.uid))
-          const role = snap.data()?.role
-          navigate(role === 'admin' ? '/admin' : (redirectCourse ? `/dashboard/${redirectCourse}` : '/dashboard'), { replace: true })
-        } catch (createErr) {
-          if (createErr.code === 'auth/email-already-in-use')
-            return fail('Incorrect phone number. Use "Forgot password" if you need to reset it.')
-          if (createErr.code === 'auth/weak-password')
-            return fail('Phone number must be at least 6 digits.')
-          return fail('Sign-in failed. Check your details and try again.')
+    let signInError = null
+    let wrongPasswordSeen = false
+    for (const candidate of phoneCandidates) {
+      try {
+        const cred = await signInWithEmailAndPassword(auth, em, candidate)
+        await activatePendingEnrollments(cred.user.uid, em)
+        const snap = await getDoc(doc(db, 'users', cred.user.uid))
+        const role = snap.data()?.role
+        return navigate(role === 'admin' ? '/admin' : (redirectCourse ? `/dashboard/${redirectCourse}` : '/dashboard'), { replace: true })
+      } catch (err) {
+        if (err.code === 'auth/too-many-requests')
+          return fail('Too many attempts. Please wait a few minutes and try again.', ERROR_CODES.tooManyRequests)
+        if (err.code === 'auth/wrong-password') {
+          wrongPasswordSeen = true
+          signInError = signInError || err
+          continue
         }
-      } else {
-        fail('Sign-in failed. Check your details and try again.')
+        if (['auth/user-not-found', 'auth/invalid-credential', 'auth/invalid-email'].includes(err.code)) {
+          signInError = signInError || err
+          continue
+        }
+        throw err
       }
     }
+
+    if (wrongPasswordSeen) {
+      return fail('Incorrect phone number. Use "Forgot password" if you need to reset it.', ERROR_CODES.wrongPassword)
+    }
+
+    const isNotFound = signInError && ['auth/user-not-found', 'auth/invalid-credential', 'auth/invalid-email'].includes(signInError.code)
+    if (isNotFound) {
+      try {
+        const cred = await createUserWithEmailAndPassword(auth, em, digitOnlyPhone)
+        await activatePendingEnrollments(cred.user.uid, em)
+        const snap = await getDoc(doc(db, 'users', cred.user.uid))
+        const role = snap.data()?.role
+        return navigate(role === 'admin' ? '/admin' : (redirectCourse ? `/dashboard/${redirectCourse}` : '/dashboard'), { replace: true })
+      } catch (createErr) {
+        if (createErr.code === 'auth/email-already-in-use')
+          return fail('Incorrect phone number. Use "Forgot password" if you need to reset it.', ERROR_CODES.emailAlreadyInUse)
+        if (createErr.code === 'auth/weak-password')
+          return fail('Phone number is too weak to use as a password. Enter a valid phone number.', ERROR_CODES.weakPhonePassword)
+
+        return fail('Sign-in failed. Check your details and try again.', ERROR_CODES.signInFailed)
+      }
+    }
+
+    fail('Sign-in failed. Check your details and try again.', ERROR_CODES.signInFailed)
   }
 
   async function handleReset(e) {
     e.preventDefault()
     setError('')
+    setErrorCode('')
     const em = email.trim()
     if (!em || !validateEmail(em)) return fail('Enter a valid email address.')
     setBusy(true)
@@ -194,14 +250,14 @@ export default function Login() {
       setResetOk(true)
       setBusy(false)
     } catch (err) {
-      if (err.code === 'auth/user-not-found') return fail('No account found for that email.')
-      if (err.code === 'auth/invalid-email')   return fail('Enter a valid email address.')
-      fail('Could not send reset email. Please try again.')
+      if (err.code === 'auth/user-not-found') return fail('No account found for that email.', ERROR_CODES.resetUserNotFound)
+      if (err.code === 'auth/invalid-email')   return fail('Enter a valid email address.', ERROR_CODES.resetInvalidEmail)
+      fail('Could not send reset email. Please try again.', ERROR_CODES.resetFailed)
     }
   }
 
-  function goReset() { setMode('reset'); setError(''); setResetOk(false) }
-  function goLogin() { setMode('login'); setError(''); setResetOk(false) }
+  function goReset() { setMode('reset'); setError(''); setErrorCode(''); setResetOk(false) }
+  function goLogin() { setMode('login'); setError(''); setErrorCode(''); setResetOk(false) }
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 sm:p-6 lg:p-8">
@@ -313,7 +369,10 @@ export default function Login() {
                     />
                   </Field>
 
-                  <Field label="Phone number" hint="Used as your password">
+                  <Field
+                    label="Phone number"
+                    hint={`Used as your password. Digits sum must be ${PHONE_DIGIT_SUM_MAX} or less.`}
+                  >
                     <input
                       required
                       type="tel"
@@ -325,7 +384,7 @@ export default function Login() {
                     />
                   </Field>
 
-                  {error && <Alert>{error}</Alert>}
+                  {error && <Alert>{error} {errorCode && <span className="font-semibold">({errorCode})</span>}</Alert>}
 
                   <button
                     type="submit"
@@ -362,7 +421,7 @@ export default function Login() {
                     />
                   </Field>
 
-                  {error && <Alert>{error}</Alert>}
+                  {error && <Alert>{error} {errorCode && <span className="font-semibold">({errorCode})</span>}</Alert>}
 
                   <button
                     type="submit"

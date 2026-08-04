@@ -2,14 +2,17 @@ import { useEffect, useState, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Plus, Eye, CheckCircle2, Circle, Trash2, Pencil,
-  Loader2, AlertTriangle, X, ArrowRight, LogOut, Check, Menu,
+  Loader2, AlertTriangle, X, ArrowRight, LogOut, Check, Menu, Sun, Moon,
 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
+import { useTheme } from '../../contexts/ThemeContext'
 import { listCourses, createCourse, deleteCourse, updateCourse } from '../../lib/data'
 import { grantAccessOnly } from '../../lib/access'
 
 export default function AdminDashboard() {
   const { logout } = useAuth()
+  const { theme, toggleTheme } = useTheme()
+  const isDark = theme === 'dark'
   const [courses, setCourses]   = useState(null)
   const [creating, setCreating] = useState(false)
   const [busy, setBusy]         = useState({})      // { [courseId]: 'publish' | 'delete' }
@@ -85,12 +88,12 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-white text-black">
+    <div className={`min-h-screen ${isDark ? 'bg-neutral-950 text-white' : 'bg-white text-black'}`}>
 
       {/* ── Fixed header ── */}
-      <header className="fixed top-0 inset-x-0 z-40 bg-white border-b border-black/10">
+      <header className={`fixed top-0 inset-x-0 z-40 ${isDark ? 'bg-neutral-950 border-neutral-800' : 'bg-white border-black/10'} border-b`}>
         <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
-          <Link to="/admin" className=" text-lg font-semibold tracking-tight text-black">
+          <Link to="/admin" className={`text-lg font-semibold tracking-tight ${isDark ? 'text-white' : 'text-black'}`}>
             CoursePress <span className="text-amber-500">·</span> Admin
           </Link>
 
@@ -98,21 +101,28 @@ export default function AdminDashboard() {
           <div className="hidden sm:flex items-center gap-5 text-sm">
             <Link
               to="/"
-              className="flex items-center gap-1.5 text-zinc-500 hover:text-black transition"
+              className={`flex items-center gap-1.5 transition ${isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-500 hover:text-black'}`}
             >
               View site <ArrowRight className="h-3.5 w-3.5" />
             </Link>
             <button
+              onClick={toggleTheme}
+              className={`flex items-center gap-1.5 transition ${isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-500 hover:text-black'}`}
+            >
+              {isDark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+              {isDark ? 'Light mode' : 'Dark mode'}
+            </button>
+            <button
               onClick={handleCreate}
               disabled={creating}
-              className="flex items-center gap-1.5 text-zinc-500 hover:text-black transition disabled:opacity-50"
+              className={`flex items-center gap-1.5 transition disabled:opacity-50 ${isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-500 hover:text-black'}`}
             >
               {creating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
               Add course
             </button>
             <button
               onClick={logout}
-              className="flex items-center gap-1.5 text-zinc-500 hover:text-black transition"
+              className={`flex items-center gap-1.5 transition ${isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-500 hover:text-black'}`}
             >
               Sign out <LogOut className="h-3.5 w-3.5" />
             </button>
@@ -121,7 +131,7 @@ export default function AdminDashboard() {
           {/* Mobile menu trigger */}
           <button
             onClick={() => setMenuOpen(true)}
-            className="sm:hidden flex items-center justify-center h-9 w-9 rounded-lg text-zinc-600 hover:bg-zinc-100 active:scale-95 transition"
+            className={`sm:hidden flex items-center justify-center h-9 w-9 rounded-lg transition active:scale-95 ${isDark ? 'text-white hover:bg-white/10' : 'text-zinc-600 hover:bg-zinc-100'}`}
             aria-label="Open menu"
           >
             <Menu className="h-5 w-5" />
@@ -139,7 +149,7 @@ export default function AdminDashboard() {
             className="absolute inset-0 bg-black/40 sidebar-backdrop"
             onClick={() => setMenuOpen(false)}
           />
-          <div className="absolute top-0 right-0 h-full w-72 max-w-[80%] bg-white border-l border-black/10 shadow-xl sidebar-in flex flex-col">
+          <div className={`absolute top-0 right-0 h-full w-72 max-w-[80%] ${isDark ? 'bg-neutral-950 border-neutral-800' : 'bg-white border-black/10'} shadow-xl sidebar-in flex flex-col`}>
             <div className="h-16 px-5 flex items-center justify-between border-b border-black/10 shrink-0">
               <span className=" font-semibold text-black">Menu</span>
               <button
@@ -155,7 +165,7 @@ export default function AdminDashboard() {
               <button
                 onClick={handleCreate}
                 disabled={creating}
-                className="flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium text-black hover:bg-amber-50 active:scale-[0.98] transition disabled:opacity-50"
+                className={`flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium hover:bg-amber-50 active:scale-[0.98] transition disabled:opacity-50 ${isDark ? 'text-white' : 'text-black'}`}
               >
                 {creating
                   ? <Loader2 className="h-4 w-4 animate-spin text-amber-600" />
@@ -166,17 +176,24 @@ export default function AdminDashboard() {
               <Link
                 to="/"
                 onClick={() => setMenuOpen(false)}
-                className="flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium text-black hover:bg-zinc-100 active:scale-[0.98] transition"
+                className={`flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium hover:bg-zinc-100 active:scale-[0.98] transition ${isDark ? 'text-white' : 'text-black'}`}
               >
                 <Eye className="h-4 w-4 text-zinc-500" />
                 View site
               </Link>
 
+              <button
+                onClick={toggleTheme}
+                className={`flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium hover:bg-zinc-100 active:scale-[0.98] transition ${isDark ? 'text-white' : 'text-black'}`}
+              >
+                {isDark ? <Sun className="h-4 w-4 text-yellow-300" /> : <Moon className="h-4 w-4 text-slate-500" />}
+                {isDark ? 'Light mode' : 'Dark mode'}
+              </button>
               <div className="h-px bg-black/10 my-2" />
 
               <button
                 onClick={handleLogout}
-                className="flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium text-black hover:bg-zinc-100 active:scale-[0.98] transition"
+                className={`flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium hover:bg-zinc-100 active:scale-[0.98] transition ${isDark ? 'text-white' : 'text-black'}`}
               >
                 <LogOut className="h-4 w-4 text-zinc-500" />
                 Sign out

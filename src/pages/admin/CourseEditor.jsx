@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { getCourse, updateCourse } from '../../lib/data'
+import { useTheme } from '../../contexts/ThemeContext'
 
 // ---------------------------------------------------------------------------
 // Cloudinary setup (free — 25 GB storage, no credit card needed)
@@ -48,6 +49,8 @@ function uid() { return Math.random().toString(36).slice(2, 9) }
 
 export default function CourseEditor() {
   const { courseId } = useParams()
+  const { theme } = useTheme()
+  const isDark = theme === 'dark'
   const [course,    setCourse]    = useState(null)
   const [saving,    setSaving]    = useState(false)
   const [savedAt,   setSavedAt]   = useState(null)
@@ -149,10 +152,10 @@ export default function CourseEditor() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-24">
+    <div className={`min-h-screen pb-24 ${isDark ? 'bg-neutral-950 text-white' : 'bg-slate-50 text-slate-900'}`}>
 
       {/* Sticky save bar */}
-      <header className="sticky top-0 z-10 bg-white border-b border-slate-200 shadow-sm">
+      <header className={`sticky top-0 z-10 ${isDark ? 'bg-neutral-900 border-neutral-800 shadow-none' : 'bg-white border-b border-slate-200 shadow-sm'}`}>
         <div className="max-w-3xl mx-auto px-6 py-3.5 flex items-center justify-between">
           <Link to="/admin" className="text-sm text-slate-500 hover:text-slate-800 transition">
             ← All courses

@@ -81,7 +81,7 @@ export default function CoursePlayer() {
 
   return (
     <div className={`min-h-screen flex ${isDark ? 'bg-neutral-950' : 'bg-white'}`}>
-      <main className="flex-1 min-w-0 overflow-auto order-first">
+      <main className="flex-1 min-w-0 overflow-auto order-2 lg: order-second">
         <div className={`min-h-screen transition-colors duration-200 ${bgClass}`}>
           <div className="max-w-3xl mx-auto px-5 sm:px-8 py-8 lg:py-12">
 
