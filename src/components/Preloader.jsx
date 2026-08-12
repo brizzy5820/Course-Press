@@ -49,28 +49,46 @@ export default function Preloader({ overlay = true, transparent = false, label =
       <style>{`
         .preloader-spin {
           animation: preloaderSpin 3.2s linear infinite;
+          will-change: transform;
+          backface-visibility: hidden;
+          -webkit-font-smoothing: antialiased;
         }
         @keyframes preloaderSpin {
-          from { transform: rotate(0deg); }
-          to   { transform: rotate(360deg); }
+          from { transform: rotate(0deg) translateZ(0); }
+          to   { transform: rotate(360deg) translateZ(0); }
         }
         .preloader-ping {
           animation: preloaderPing 2.2s cubic-bezier(0, 0, 0.2, 1) infinite;
+          will-change: transform, opacity;
+          backface-visibility: hidden;
         }
         .preloader-ping-delay {
           animation-delay: 1.1s;
         }
         @keyframes preloaderPing {
-          0%   { transform: scale(0.9); opacity: 0.8; }
-          75%, 100% { transform: scale(1.6); opacity: 0; }
+          0%   { transform: scale(0.9) translateZ(0); opacity: 0.8; }
+          75%, 100% { transform: scale(1.6) translateZ(0); opacity: 0; }
         }
         .preloader-dot {
           display: inline-block;
           animation: preloaderDot 1.1s ease-in-out infinite;
+          will-change: opacity, transform;
+          backface-visibility: hidden;
         }
         @keyframes preloaderDot {
-          0%, 80%, 100% { opacity: 0.25; transform: translateY(0); }
-          40%           { opacity: 1;    transform: translateY(-2px); }
+          0%, 80%, 100% { opacity: 0.25; transform: translateY(0) translateZ(0); }
+          40%           { opacity: 1;    transform: translateY(-2px) translateZ(0); }
+        }
+        @media (max-width: 768px) {
+          .preloader-spin {
+            animation: preloaderSpin 3.2s linear infinite;
+          }
+          .preloader-ping {
+            animation: preloaderPing 2.4s cubic-bezier(0, 0, 0.2, 1) infinite;
+          }
+          .preloader-dot {
+            animation: preloaderDot 1.3s ease-in-out infinite;
+          }
         }
       `}</style>
     </div>

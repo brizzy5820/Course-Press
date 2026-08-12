@@ -457,40 +457,66 @@ export default function AdminDashboard() {
         }
         .row-in {
           animation: rowIn 0.35s ease both;
+          will-change: opacity, transform;
+          backface-visibility: hidden;
         }
         @keyframes rowIn {
-          from { opacity: 0; transform: translateY(4px); }
-          to   { opacity: 1; transform: translateY(0); }
+          from { opacity: 0; transform: translateY(4px) translateZ(0); }
+          to   { opacity: 1; transform: translateY(0) translateZ(0); }
         }
         .modal-backdrop {
           animation: fadeIn 0.18s ease both;
+          will-change: opacity;
+          backface-visibility: hidden;
         }
         .modal-in {
           animation: modalIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+          will-change: opacity, transform;
+          backface-visibility: hidden;
         }
         @keyframes fadeIn {
           from { opacity: 0; } to { opacity: 1; }
         }
         @keyframes modalIn {
-          from { opacity: 0; transform: scale(0.96) translateY(6px); }
-          to   { opacity: 1; transform: scale(1) translateY(0); }
+          from { opacity: 0; transform: scale(0.96) translateY(6px) translateZ(0); }
+          to   { opacity: 1; transform: scale(1) translateY(0) translateZ(0); }
         }
         .toast-in {
           animation: toastIn 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+          will-change: opacity, transform;
+          backface-visibility: hidden;
         }
         @keyframes toastIn {
-          from { opacity: 0; transform: translateY(8px) scale(0.98); }
-          to   { opacity: 1; transform: translateY(0) scale(1); }
+          from { opacity: 0; transform: translateY(8px) scale(0.98) translateZ(0); }
+          to   { opacity: 1; transform: translateY(0) scale(1) translateZ(0); }
         }
         .sidebar-backdrop {
           animation: fadeIn 0.18s ease both;
+          will-change: opacity;
+          backface-visibility: hidden;
         }
         .sidebar-in {
           animation: sidebarIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+          will-change: transform;
+          backface-visibility: hidden;
         }
         @keyframes sidebarIn {
-          from { transform: translateX(100%); }
-          to   { transform: translateX(0); }
+          from { transform: translateX(100%) translateZ(0); }
+          to   { transform: translateX(0) translateZ(0); }
+        }
+        @media (max-width: 768px) {
+          .row-in {
+            animation: rowIn 0.4s ease both;
+          }
+          .modal-in {
+            animation: modalIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+          }
+          .toast-in {
+            animation: toastIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+          }
+          .sidebar-in {
+            animation: sidebarIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+          }
         }
       `}</style>
     </div>

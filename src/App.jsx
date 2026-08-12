@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { Routes, Route, useLocation } from 'react-router-dom'
 import Home from './pages/Home'
 import CourseDetail from './pages/CourseDetail'
@@ -14,11 +14,26 @@ import Preloader from './components/Preloader'
 function RoutePreloader() {
   const location = useLocation()
   const [show, setShow] = useState(false)
+  const timeoutRef = useRef(null)
+  const frameRef = useRef(null)
 
   useEffect(() => {
-    setShow(true)
-    const timer = window.setTimeout(() => setShow(false), 520)
-    return () => window.clearTimeout(timer)
+    // Clear any pending operations
+    if (timeoutRef.current) clearTimeout(timeoutRef.current)
+    if (frameRef.current) cancelAnimationFrame(frameRef.current)
+
+    // Use requestAnimationFrame to ensure DOM is ready before showing preloader
+    frameRef.current = requestAnimationFrame(() => {
+      setShow(true)
+      timeoutRef.current = window.setTimeout(() => {
+        setShow(false)
+      }, 520)
+    })
+
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current)
+      if (frameRef.current) cancelAnimationFrame(frameRef.current)
+    }
   }, [location.pathname, location.search])
 
   return show ? <Preloader label="Loading page" /> : null
