@@ -12,6 +12,7 @@ import {
 } from '../lib/data'
 import Sidebar from '../components/Sidebar'
 import VideoPlayer from '../components/VideoPlayer'
+import Preloader from '../components/Preloader'
 
 export default function CoursePlayer() {
   const { courseId } = useParams()
@@ -51,11 +52,7 @@ export default function CoursePlayer() {
   }, [lessons])
 
   if (allowed === false) return <Navigate to={`/courses/${courseId}`} replace />
-  if (!course || allowed === null) return (
-    <div className={`min-h-screen flex items-center justify-center ${isDark ? 'bg-neutral-950' : 'bg-neutral-50'}`}>
-      <div className="h-6 w-6 rounded-full border-2 border-amber-500 border-t-transparent animate-spin" />
-    </div>
-  )
+  if (!course || allowed === null) return <Preloader label="Loading lesson" />
 
   async function toggleComplete() {
     const done = !completedIds.includes(activeLesson.id)
@@ -66,6 +63,7 @@ export default function CoursePlayer() {
   }
 
   const lessonIdx  = lessons.findIndex(l => l.id === activeLesson?.id)
+  
   const hasPrev    = lessonIdx > 0
   const hasNext    = lessonIdx < lessons.length - 1
   const isDoneLesson = completedIds.includes(activeLesson?.id)
@@ -80,8 +78,8 @@ export default function CoursePlayer() {
   const bgClass   = isDarkText ? 'bg-slate-950 text-slate-100' : isDark ? 'bg-neutral-950 text-neutral-100' : 'bg-white text-slate-900'
 
   return (
-    <div className={`min-h-screen flex ${isDark ? 'bg-neutral-950' : 'bg-white'}`}>
-      <main className="flex-1 min-w-0 overflow-auto order-2 lg: order-second">
+    <div className={`min-h-screen ${isDark ? 'bg-neutral-950' : 'bg-white'}`}>
+      <main className="min-w-0 overflow-auto pt-14 lg:ml-[288px] lg:pt-0">
         <div className={`min-h-screen transition-colors duration-200 ${bgClass}`}>
           <div className="max-w-3xl mx-auto px-5 sm:px-8 py-8 lg:py-12">
 
@@ -130,7 +128,7 @@ export default function CoursePlayer() {
             </div>
 
             {/* Content */}
-            <div className="mt-6">
+            <div  className="mt-6">
               {activeLesson?.type === 'video' ? (
                 <VideoPlayer youtubeId={activeLesson.youtubeId} onEnded={() => {}} />
               ) : (

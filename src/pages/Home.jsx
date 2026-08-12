@@ -1,185 +1,83 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { ArrowRight, BookOpen, Clock, Sparkles } from 'lucide-react'
 import { listCourses, flattenLessons } from '../lib/data'
-import { useAuth } from '../contexts/AuthContext'
-import { useToast } from '../contexts/ToastContext'
+import TopNav from '../components/TopNav'
 
-/* ─── Subtle background decorations ─────────────────────────────────────── */
 function BackgroundCanvas() {
   return (
     <div aria-hidden className="pointer-events-none fixed inset-0 overflow-hidden z-0">
-      {/* Soft dot-grid pattern */}
-      <svg
-        className="absolute inset-0 w-full h-full opacity-[0.035]"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <defs>
-          <pattern id="dot-grid" x="0" y="0" width="28" height="28" patternUnits="userSpaceOnUse">
-            <circle cx="1.5" cy="1.5" r="1.5" fill="#1a1a2e" />
-          </pattern>
-        </defs>
-        <rect width="100%" height="100%" fill="url(#dot-grid)" />
-      </svg>
-
-      {/* Top-left ambient orb */}
-      <div
-        className="absolute -top-32 -left-32 w-[520px] h-[520px] rounded-full"
-        style={{
-          background: 'radial-gradient(circle at 40% 40%, rgba(99,102,241,0.09) 0%, transparent 70%)',
-          filter: 'blur(40px)',
-        }}
+      <img
+        src="https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
+        alt=""
+        className="h-full w-full object-cover opacity-[0.510] dark:opacity-[0.64]"
       />
+      <div className="absolute inset-0 bg-gradient-to-b from-white/75 via-white/90 to-white dark:from-neutral-950/75 dark:via-neutral-950/90 dark:to-neutral-950" />
+    </div>
+  )
+}
 
-      {/* Top-right warm orb */}
-      <div
-        className="absolute -top-20 right-0 w-[420px] h-[420px] rounded-full"
-        style={{
-          background: 'radial-gradient(circle at 60% 30%, rgba(251,191,36,0.07) 0%, transparent 65%)',
-          filter: 'blur(50px)',
-        }}
+function HeroBackground() {
+  return (
+    <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[520px] w-screen left-1/2 -translate-x-1/2 overflow-hidden">
+      {/* Full-bleed laptop photo */}
+      <img
+        src="https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?q=80&w=1170&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
+        alt=""
+        className="h-full w-full object-cover opacity-[0.310] dark:opacity-[0.14]"
       />
-
-      {/* Mid-page cool orb */}
+      {/* Wash it toward the page background so it reads as texture, not a photo */}
+      <div className="absolute inset-0 bg-gradient-to-b from-white/70 via-white/90 to-white dark:from-neutral-950/75 dark:via-neutral-950/92 dark:to-neutral-950" />
       <div
-        className="absolute top-[45%] -right-40 w-[500px] h-[500px] rounded-full"
-        style={{
-          background: 'radial-gradient(circle at 70% 50%, rgba(14,165,233,0.06) 0%, transparent 70%)',
-          filter: 'blur(60px)',
-        }}
-      />
-
-      {/* Bottom-left lavender orb */}
-      <div
-        className="absolute bottom-0 -left-20 w-[480px] h-[480px] rounded-full"
-        style={{
-          background: 'radial-gradient(circle at 30% 70%, rgba(139,92,246,0.07) 0%, transparent 65%)',
-          filter: 'blur(50px)',
-        }}
-      />
-
-      {/* Diagonal faint line accent — top right */}
-      <svg
-        className="absolute top-24 right-24 opacity-[0.045] hidden sm:block"
-        width="220" height="220" viewBox="0 0 220 220"
-        fill="none" xmlns="http://www.w3.org/2000/svg"
-      >
-        {[0, 20, 40, 60, 80, 100].map((offset) => (
-          <line
-            key={offset}
-            x1={offset} y1="0"
-            x2="220" y2={220 - offset}
-            stroke="#64748b" strokeWidth="1"
-          />
-        ))}
-      </svg>
-
-      {/* Diagonal faint line accent — bottom left */}
-      <svg
-        className="absolute bottom-24 left-16 opacity-[0.04] hidden sm:block"
-        width="160" height="160" viewBox="0 0 160 160"
-        fill="none" xmlns="http://www.w3.org/2000/svg"
-      >
-        {[0, 22, 44, 66].map((offset) => (
-          <line
-            key={offset}
-            x1="0" y1={offset}
-            x2={160 - offset} y2="160"
-            stroke="#64748b" strokeWidth="1"
-          />
-        ))}
-      </svg>
-
-      {/* Faint arc ring — hero area */}
-      <svg
-        className="absolute top-8 left-1/2 -translate-x-1/2 opacity-[0.04] hidden md:block"
-        width="700" height="340" viewBox="0 0 700 340"
-        fill="none" xmlns="http://www.w3.org/2000/svg"
-      >
-        <ellipse cx="350" cy="0" rx="340" ry="280" stroke="#6366f1" strokeWidth="1" />
-        <ellipse cx="350" cy="0" rx="290" ry="230" stroke="#6366f1" strokeWidth="0.6" />
-      </svg>
-
-      {/* Subtle top gradient fade */}
-      <div
-        className="absolute inset-x-0 top-0 h-64"
-        style={{
-          background: 'linear-gradient(to bottom, rgba(237,233,254,0.18) 0%, transparent 100%)',
-        }}
-      />
-
-      {/* Subtle bottom gradient fade */}
-      <div
-        className="absolute inset-x-0 bottom-0 h-48"
-        style={{
-          background: 'linear-gradient(to top, rgba(224,242,254,0.12) 0%, transparent 100%)',
-        }}
+        className="absolute inset-0"
+        style={{ background: 'radial-gradient(circle at 30% 20%, rgba(245,158,11,0.08) 0%, transparent 60%)' }}
       />
     </div>
   )
 }
 
-/* ─── Main page ──────────────────────────────────────────────────────────── */
 export default function Home() {
   const [courses, setCourses] = useState(null)
-  const { user, logout }      = useAuth()
-  const toast                 = useToast()
 
   useEffect(() => {
     listCourses({ onlyPublished: true }).then(setCourses)
   }, [])
 
-  async function handleLogout() {
-    await logout()
-    toast('You\'ve been signed out.', 'info')
-  }
-
   return (
-    <div className="min-h-screen bg-[#F7F8FA] relative">
+    <div className="relative min-h-screen">
       <BackgroundCanvas />
 
-      {/* Everything else sits above the background */}
       <div className="relative z-10">
-        <header className="bg-white/80 backdrop-blur-sm border-b border-zinc-200/70">
-          <div className="max-w-5xl mx-auto px-6 py-5 flex items-center justify-between">
-            <Link to="/" className="font-bold text-zinc-900 text-lg tracking-tight">
-              CoursePress
-            </Link>
-            {user ? (
-              <div className="flex items-center gap-4 text-sm">
-                <Link to="/dashboard" className="font-medium hover:text-black">My library</Link>
-                <button onClick={handleLogout} className="text-zinc-600 hover:text-black transition">
-                  Sign out
-                </button>
-              </div>
-            ) : (
-              <Link to="/login" className="text-sm font-medium hover:text-black transition">
-                Sign in
-              </Link>
-            )}
-          </div>
-        </header>
+        <TopNav  />
 
-        <section className="max-w-5xl mx-auto px-6 pt-16 pb-10">
-          <p className="font-mono text-xs uppercase tracking-[0.2em] text-zinc-500 mb-4">
-            Self-paced &middot; lifetime access
-          </p>
-          <h1 className="font-sans text-3xl lg:text-4xl font-semibold leading-tight max-w-2xl text-black">
-            Courses that builds careers
+        <section className="relative mx-auto max-w-5xl px-6 pb-12 pt-16">
+          {/* <HeroBackground /> */}
+
+       
+          <h1 className="mt-5 max-w-3xl font-sans text-2xl font-semibold leading-tight text-neutral-950 dark:text-white lg:text-5xl">
+            Courses that build practical, career-ready skills
           </h1>
-          <p className="mt-4 text-zinc-600 max-w-xl text-lg">
+          <p className="mt-5 max-w-2xl text-lg leading-relaxed text-zinc-600 dark:text-zinc-400">
             Pick a course, see exactly what's inside before you buy, and get instant
             access the moment payment clears.
           </p>
+
         </section>
 
-        <section className="max-w-5xl mx-auto px-6 pb-24">
-          {courses === null && <p className="text-zinc-600">Loading courses…</p>}
+        <section className="mx-auto max-w-5xl px-6 pb-24">
+          {courses === null && (
+            <div className="grid gap-6 sm:grid-cols-2">
+              {Array.from({ length: 2 }).map((_, index) => (
+                <CourseCardSkeleton key={index} />
+              ))}
+            </div>
+          )}
           {courses?.length === 0 && (
-            <div className="border border-dashed border-zinc-300 rounded-xl p-10 text-center text-zinc-500">
+            <div className="rounded-2xl border border-dashed border-amber-300 bg-white/70 p-10 text-center text-zinc-500 dark:border-amber-400/20 dark:bg-neutral-900/70 dark:text-zinc-400">
               No courses published yet. Check back soon.
             </div>
           )}
-          <div className="grid sm:grid-cols-2 gap-6">
+          <div className="grid gap-6 sm:grid-cols-2">
             {courses?.map(course => <CourseCard key={course.id} course={course} />)}
           </div>
         </section>
@@ -188,34 +86,70 @@ export default function Home() {
   )
 }
 
-/* ─── Course card ────────────────────────────────────────────────────────── */
+function CourseCardSkeleton() {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-amber-200/70 bg-white/85 shadow-sm dark:border-amber-400/10 dark:bg-neutral-900/85">
+      <div className="skeleton-shimmer aspect-[16/9] bg-zinc-100/70 dark:bg-neutral-800" />
+
+      <div className="p-5">
+        <div className="skeleton-shimmer h-6 w-4/5 rounded-md bg-neutral-200 dark:bg-neutral-800" />
+        <div className="mt-2 space-y-2">
+          <div className="skeleton-shimmer h-3.5 w-full rounded bg-neutral-200 dark:bg-neutral-800" />
+          <div className="skeleton-shimmer h-3.5 w-2/3 rounded bg-neutral-200 dark:bg-neutral-800" />
+        </div>
+
+        <div className="mt-5 flex items-center justify-between">
+          <div className="skeleton-shimmer h-4 w-24 rounded bg-neutral-200 dark:bg-neutral-800" />
+          <div className="skeleton-shimmer h-5 w-16 rounded bg-neutral-200 dark:bg-neutral-800" />
+        </div>
+
+        <div className="mt-5 flex items-center justify-between border-t border-amber-100 pt-4 dark:border-amber-400/10">
+          <div className="skeleton-shimmer h-4 w-20 rounded bg-neutral-200 dark:bg-neutral-800" />
+          <div className="skeleton-shimmer h-4 w-4 rounded bg-neutral-200 dark:bg-neutral-800" />
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function CourseCard({ course }) {
   const lessonCount = flattenLessons(course).length
+
   return (
     <Link
       to={`/courses/${course.id}`}
-      className="group block rounded-2xl border border-zinc-200 bg-white overflow-hidden hover:border-black hover:shadow-[0_8px_30px_-12px_rgba(0,0,0,0.15)] transition"
+      className="group block overflow-hidden rounded-2xl border border-amber-200/80 bg-white shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-amber-400 hover:shadow-[0_18px_44px_-24px_rgba(146,64,14,0.55)] dark:border-amber-400/10 dark:bg-neutral-900"
     >
-      <div className="aspect-[16/9] bg-white overflow-hidden">
+      <div className="relative aspect-[16/9] overflow-hidden bg-amber-50 dark:bg-neutral-800">
         {course.coverImage ? (
           <img
-            src={course.coverImage} alt=""
-            className="h-full w-full object-cover group-hover:scale-105 transition duration-500"
+            src={course.coverImage}
+            alt=""
+            className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
           />
         ) : (
-          <div className="h-full w-full flex items-center justify-center font-bold text-3xl text-zinc-300">
-            {course.title?.[0] || '?'}
+          <div className="flex h-full w-full items-center justify-center text-amber-500">
+            <BookOpen className="h-10 w-10" />
           </div>
         )}
+        <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/35 to-transparent opacity-0 transition group-hover:opacity-100" />
       </div>
+
       <div className="p-5">
-        <h3 className="tracking-tight text-xl font-semibold leading-snug text-black">{course.title}</h3>
-        <p className="text-sm text-zinc-600 mt-1 line-clamp-2">{course.subtitle}</p>
+        <h3 className="text-xl font-semibold leading-snug tracking-tight text-neutral-950 dark:text-white">{course.title}</h3>
+        <p className="mt-1 line-clamp-2 text-sm text-zinc-600 dark:text-zinc-400">{course.subtitle}</p>
         <div className="mt-4 flex items-center justify-between">
-          <span className="font-mono text-xs text-zinc-500">{lessonCount} lessons</span>
-          <span className="font-semibold text-black">
+          <span className="inline-flex items-center gap-1.5 font-mono text-xs text-zinc-500 dark:text-zinc-400">
+            <Clock className="h-3.5 w-3.5 text-amber-600" />
+            {lessonCount} lessons
+          </span>
+          <span className="font-semibold text-neutral-950 dark:text-white">
             {course.price ? `₦${Number(course.price).toLocaleString()}` : 'Free'}
           </span>
+        </div>
+        <div className="mt-5 flex items-center justify-between border-t border-amber-100 pt-4 dark:border-amber-400/10">
+          <span className="text-xs font-semibold text-amber-700 dark:text-amber-300">View course</span>
+          <ArrowRight className="h-4 w-4 text-amber-600 transition group-hover:translate-x-0.5" />
         </div>
       </div>
     </Link>

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-
+import { PlayCircle } from 'lucide-react'
+import { Loader } from 'lucide-react'
 // Accept a full YouTube URL OR a bare video ID.
 // Supports: watch?v=, youtu.be/, /embed/, /shorts/
 function extractYouTubeId(input) {
@@ -85,8 +86,10 @@ export default function VideoPlayer({ youtubeId: rawInput, onEnded }) {
 
   if (error) {
     return (
-      <div className="aspect-video rounded-xl bg-slate-100 flex items-center justify-center text-center px-6">
-        <p className="text-sm text-slate-500">{error}</p>
+      <div className="aspect-video rounded-xl bg-slate-900 flex flex-col items-center justify-center gap-2 text-center px-6">
+        <PlayCircle className="h-10 w-10 text-white/60" />
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/75">Coming soon</p>
+        <p className="text-xs text-white/45">{error}</p>
       </div>
     )
   }
@@ -96,7 +99,7 @@ export default function VideoPlayer({ youtubeId: rawInput, onEnded }) {
       <div className="relative aspect-video rounded-xl overflow-hidden bg-black shadow-lg">
         {!ready && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900 z-10">
-            <div className="h-8 w-8 rounded-full border-2 border-amber-500 border-t-transparent animate-spin mb-2" />
+            <Loader className="h-8 w-8 rounded-full text-amber-500 border-amber-500 border-t-transparent animate-spin mb-2" />
             <p className="text-xs text-zinc-400 font-medium">Loading video...</p>
           </div>
         )}

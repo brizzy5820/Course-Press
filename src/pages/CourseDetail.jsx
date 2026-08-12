@@ -7,7 +7,7 @@ import {
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore'
 import {
   PlayCircle, FileText, Lock, Clock,
-  CheckCircle2, ArrowRight, Loader2,
+  CheckCircle2, ArrowRight, Loader,
   ChevronDown, ChevronRight, ExternalLink,
 } from 'lucide-react'
 import { auth, db } from '../firebase'
@@ -20,6 +20,8 @@ import {
 import { useAuth } from '../contexts/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
 import VideoPlayer from '../components/VideoPlayer'
+import TopNav from '../components/TopNav'
+import Preloader from '../components/Preloader'
 
 function truncateHalf(text = '') {
   if (!text) return ''
@@ -112,11 +114,7 @@ export default function CourseDetail() {
     }
   }, [course, courseId])
 
-  if (!course) return (
-    <div className={`min-h-screen flex items-center justify-center ${isDark ? 'bg-neutral-950' : 'bg-[#F7F8FA]'}`}>
-      <Loader2 className="h-6 w-6 animate-spin text-zinc-500" />
-    </div>
-  )
+  if (!course) return <Preloader label="Loading course" />
 
   function setField(key) {
     return e => setForm(f => ({ ...f, [key]: e.target.value }))
@@ -218,10 +216,16 @@ export default function CourseDetail() {
 
   return (
     <div className={`min-h-screen relative overflow-hidden transition-colors duration-200 ${isDark ? 'bg-neutral-950' : 'bg-[#F7F8FA]'}`}>
+      {course.coverImage && (
+        <div className="pointer-events-none w-full absolute right-[-8%] top-28 hidden h-[360px] w-[360px] overflow-hidden rounded-[2rem] opacity-[0.08] blur-[1px] lg:block">
+          {/* <img src='https://images.unsplash.com/photo-1497633762265-9d179a990aa6?q=80&w=1173&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D' alt="" className="h-full w-full object-cover" /> */}
+        </div>
+      )}
 
       <div className="relative z-10">
         {/* Header — matches dashboard style */}
-        <header className={`backdrop-blur-sm border-b sticky top-0 z-10 transition-colors duration-200
+        <TopNav maxWidth="max-w-3xl" showBack />
+        <header className={`hidden backdrop-blur-sm border-b sticky top-0 z-10 transition-colors duration-200
           ${isDark ? 'bg-neutral-900/90 border-neutral-800' : 'bg-white/90 border-zinc-200'}`}>
           <div className="max-w-3xl mx-auto px-6 h-16 flex items-center justify-between">
             <Link to="/" className={`font-bold text-[17px] tracking-tight transition
@@ -278,13 +282,13 @@ export default function CourseDetail() {
             {(course.curriculum || []).map((mod, mi) => {
               const modOpen = openModules.has(mod.id)
               return (
-                <div key={mod.id} className={`border rounded-xl overflow-hidden ${isDark ? 'border-neutral-800 bg-neutral-900' : 'border-zinc-200 bg-white'}`}>
+                <div key={mod.id} className={`border rounded-2xl overflow-hidden shadow-sm ${isDark ? 'border-amber-400/10 bg-neutral-900' : 'border-zinc-200 bg-white'}`}>
                   {/* Module header — accordion toggle */}
                   <button
                     type="button"
                     onClick={() => toggleModule(mod.id)}
                     className={`w-full px-5 py-3 flex items-center gap-2 text-left transition
-                      ${isDark ? 'bg-neutral-800 hover:bg-neutral-750' : 'bg-zinc-100 hover:bg-zinc-150'}`}
+                      ${isDark ? 'bg-amber-400/[0.06] hover:bg-amber-400/[0.09]' : 'bg-zinc-100 hover:bg-zinc-100/70'}`}
                   >
                     {modOpen
                       ? <ChevronDown className={`h-3.5 w-3.5 shrink-0 ${isDark ? 'text-neutral-400' : 'text-zinc-500'}`} />
@@ -320,7 +324,7 @@ export default function CourseDetail() {
                                 ) : (
                                   <span className="w-3 shrink-0" />
                                 )}
-                                <span className={`font-mono text-[10px] shrink-0 w-6 ${isDark ? 'text-neutral-500' : 'text-zinc-500'}`}>{mi + 1}.{li + 1}</span>
+                                <span className={`font-mono text-[10px] shrink-0 w-6 ${isDark ? 'text-amber-300/80' : 'text-amber-700'}`}>{mi + 1}.{li + 1}</span>
                                 {isVideo
                                   ? <PlayCircle className={`h-3.5 w-3.5 shrink-0 ${isDark ? 'text-neutral-300' : 'text-zinc-700'}`} />
                                   : <FileText   className={`h-3.5 w-3.5 shrink-0 ${isDark ? 'text-neutral-300' : 'text-zinc-700'}`} />}
@@ -359,8 +363,9 @@ export default function CourseDetail() {
                                     ) : lesson.youtubeId ? (
                                       <VideoPlayer youtubeId={lesson.youtubeId} onEnded={() => {}} />
                                     ) : (
-                                      <div className={`w-full aspect-video rounded-lg flex items-center justify-center ${isDark ? 'bg-neutral-800' : 'bg-zinc-900'}`}>
+                                      <div className={`w-full aspect-video rounded-lg flex flex-col items-center justify-center gap-2 ${isDark ? 'bg-neutral-800' : 'bg-zinc-900'}`}>
                                         <PlayCircle className="h-9 w-9 text-white/60" />
+                                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/70">Coming soon</p>
                                       </div>
                                     )}
                                     <button
@@ -407,7 +412,7 @@ export default function CourseDetail() {
               <button
                 onClick={() => navigate(`/dashboard/${courseId}`)}
                 className={`w-full rounded-xl py-4 font-semibold transition flex items-center justify-center gap-2
-                  ${isDark ? 'bg-amber-500 text-black hover:bg-amber-400' : 'bg-black text-white hover:bg-amber-800'}`}
+                  ${isDark ? 'bg-amber-500 text-black hover:bg-amber-400' : 'bg-amber-600 text-white hover:bg-amber-700'}`}
               >
                 Open course <ArrowRight className="h-4 w-4" />
               </button>
@@ -425,7 +430,7 @@ export default function CourseDetail() {
                 <button
                   onClick={() => navigate(`/login?redirect=${courseId}`)}
                   className={`inline-flex items-center gap-2 mt-2 rounded-lg px-6 py-2.5 font-semibold transition text-sm
-                    ${isDark ? 'bg-amber-500 text-black hover:bg-amber-400' : 'bg-black text-white hover:bg-zinc-800'}`}
+                    ${isDark ? 'bg-amber-500 text-black hover:bg-amber-400' : 'bg-amber-600 text-white hover:bg-amber-700'}`}
                 >
                   Sign in now <ArrowRight className="h-4 w-4" />
                 </button>
@@ -490,10 +495,10 @@ export default function CourseDetail() {
                     type="submit"
                     disabled={submitting}
                     className={`w-full rounded-xl py-3.5 font-semibold transition disabled:opacity-60 flex items-center justify-center gap-2 mt-2
-                      ${isDark ? 'bg-amber-500 text-black hover:bg-amber-400' : 'bg-black text-white hover:bg-zinc-800'}`}
+                      ${isDark ? 'bg-amber-500 text-black hover:bg-amber-400' : 'bg-amber-600 text-white hover:bg-amber-700'}`}
                   >
                     {submitting
-                      ? <><Loader2 className="h-4 w-4 animate-spin" /> Opening checkout…</>
+                      ? <><Loader className="h-4 w-4 animate-spin" /> Opening checkout…</>
                       : 'Pay with card or bank transfer'}
                   </button>
 

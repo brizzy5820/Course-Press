@@ -52,11 +52,11 @@ export default function Sidebar({ course, activeLessonId, completedIds, onSelect
         </button>
       </div>
 
-      {/* Sidebar panel — slides in from the RIGHT */}
+      {/* Sidebar panel: mobile drawer on the right, fixed course rail on desktop */}
       <aside
-        className={`fixed lg:static inset-y-0 right-0 z-40 flex flex-col overflow-hidden
+        className={`fixed inset-y-0 right-0 lg:left-0 lg:right-auto z-40 flex flex-col overflow-hidden
           ${collapsed ? 'w-20 lg:w-20' : 'w-[288px] lg:w-[288px]'} border-l
-          pt-14 lg:pt-0 lg:shadow-2xl
+          lg:border-l-0 lg:border-r pt-14 lg:pt-0 lg:shadow-2xl
           transform transition-all duration-300 ease-out lg:translate-x-0
           ${isDark
             ? 'bg-zinc-950 text-zinc-300 border-white/[0.06]'
@@ -64,7 +64,7 @@ export default function Sidebar({ course, activeLessonId, completedIds, onSelect
           ${open ? 'translate-x-0 shadow-2xl shadow-black/40' : 'translate-x-full'}`}
       >
         {/* Header (desktop) */}
-        <div className={`hidden lg:flex flex-col px-6 pt-6 pb-5 border-b flex-shrink-0 ${isDark ? 'border-white/[0.06]' : 'border-neutral-200'}`}>
+        <div className={`hidden lg:flex   flex-col px-6 pt-6 pb-5 border-b flex-shrink-0 ${isDark ? 'border-white/[0.06]' : 'border-neutral-200'}`}>
           <div className="flex items-start justify-between gap-3">
             {!collapsed && (
               <div>

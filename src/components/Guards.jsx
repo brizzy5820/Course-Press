@@ -1,5 +1,6 @@
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import Preloader from './Preloader'
 
 export function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -17,9 +18,5 @@ export function AdminRoute({ children }) {
 }
 
 export function FullPageLoader() {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-spine">
-      <div className="h-8 w-8 rounded-full border-2 border-gold border-t-transparent animate-spin" />
-    </div>
-  )
+  return <Preloader label="Checking access" />
 }

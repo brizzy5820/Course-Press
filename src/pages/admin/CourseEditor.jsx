@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { getCourse, updateCourse } from '../../lib/data'
 import { useTheme } from '../../contexts/ThemeContext'
+import Preloader from '../../components/Preloader'
 
 // ---------------------------------------------------------------------------
 // Cloudinary setup (free — 25 GB storage, no credit card needed)
@@ -59,11 +60,7 @@ export default function CourseEditor() {
 
   useEffect(() => { getCourse(courseId).then(setCourse) }, [courseId])
 
-  if (!course) return (
-    <div className="min-h-screen bg-cream flex items-center justify-center">
-      <div className="h-6 w-6 rounded-full border-2 border-goldDeep border-t-transparent animate-spin" />
-    </div>
-  )
+  if (!course) return <Preloader label="Loading editor" />
 
   function set(patch) { setCourse(c => ({ ...c, ...patch })) }
 

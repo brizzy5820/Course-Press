@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   BookOpen, LogOut, Trash2, ChevronRight, ChevronDown,
-  CheckCircle2, Loader2, Pencil, X, User,
+  CheckCircle2, Pencil, X, User,
   ArrowRight, GraduationCap, Clock, Search, Sun, Moon, ArrowLeft,
 } from 'lucide-react'
 import {
@@ -17,6 +17,8 @@ import { useAuth } from '../contexts/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
 import { useToast } from '../contexts/ToastContext'
 import { listMyEnrollments, getCourse, getProgress, flattenLessons } from '../lib/data'
+import TopNav from '../components/TopNav'
+import AccountPanel from '../components/AccountPanel'
 
 // Normalize Nigerian phone numbers: +234/234 prefix → 0 prefix
 function normalizePhone(raw) {
@@ -87,9 +89,10 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-[#F7F8FA] dark:bg-neutral-950">
+      <TopNav />
 
       {/* ── Header ── */}
-      <header className="bg-white/90 dark:bg-neutral-900/90 backdrop-blur-sm border-b border-neutral-200 dark:border-neutral-800 sticky top-0 z-10">
+      <header className="hidden bg-white/90 dark:bg-neutral-900/90 backdrop-blur-sm border-b border-neutral-200 dark:border-neutral-800 sticky top-0 z-10">
         <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             {/* Back arrow */}
@@ -176,9 +179,11 @@ export default function Dashboard() {
 
         {/* Loading */}
         {items === null && (
-          <div className="flex items-center justify-center py-32">
-            <Loader2 className="h-5 w-5 animate-spin text-neutral-300" />
-          </div>
+           <div className="grid gap-6 sm:grid-cols-2">
+              {Array.from({ length: 2 }).map((_, index) => (
+                <CourseCardSkeleton key={index} />
+              ))}
+            </div>
         )}
 
         {/* Empty library */}
@@ -255,7 +260,31 @@ function Tab({ label, count, active, onClick }) {
     </button>
   )
 }
+function CourseCardSkeleton() {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-amber-200/70 bg-white/85 shadow-sm dark:border-amber-400/10 dark:bg-neutral-900/85">
+      <div className="skeleton-shimmer aspect-[16/9] bg-zinc-100/70 dark:bg-neutral-800" />
 
+      <div className="p-5">
+        <div className="skeleton-shimmer h-6 w-4/5 rounded-md bg-neutral-200 dark:bg-neutral-800" />
+        <div className="mt-2 space-y-2">
+          <div className="skeleton-shimmer h-3.5 w-full rounded bg-neutral-200 dark:bg-neutral-800" />
+          <div className="skeleton-shimmer h-3.5 w-2/3 rounded bg-neutral-200 dark:bg-neutral-800" />
+        </div>
+
+        <div className="mt-5 flex items-center justify-between">
+          <div className="skeleton-shimmer h-4 w-24 rounded bg-neutral-200 dark:bg-neutral-800" />
+          <div className="skeleton-shimmer h-5 w-16 rounded bg-neutral-200 dark:bg-neutral-800" />
+        </div>
+
+        <div className="mt-5 flex items-center justify-between border-t border-amber-100 pt-4 dark:border-amber-400/10">
+          <div className="skeleton-shimmer h-4 w-20 rounded bg-neutral-200 dark:bg-neutral-800" />
+          <div className="skeleton-shimmer h-4 w-4 rounded bg-neutral-200 dark:bg-neutral-800" />
+        </div>
+      </div>
+    </div>
+  )
+}
 // ── Course card ──────────────────────────────────────────────────────────────
 
 function CourseCard({ course, percent, completed, total }) {
@@ -342,293 +371,4 @@ function CourseCard({ course, percent, completed, total }) {
   )
 }
 
-// ── Account panel ────────────────────────────────────────────────────────────
-
-function AccountPanel({ open, onClose, user, profile, onLogout, navigate, toast, theme, toggleTheme }) {
-  const [view,       setView]       = useState('menu')
-  const [name,       setName]       = useState('')
-  const [phone,      setPhone]      = useState('')
-  const [busy,       setBusy]       = useState(false)
-  const [error,      setError]      = useState('')
-  const [deleteStep, setDeleteStep] = useState(1)
-
-  useEffect(() => {
-    if (open) {
-      setView('menu')
-      setName(profile?.name || '')
-      setPhone('')
-      setError('')
-      setBusy(false)
-      setDeleteStep(1)
-    }
-  }, [open, profile])
-
-  async function handleSaveName(e) {
-    e.preventDefault()
-    setError('')
-    if (!name.trim()) return setError('Name cannot be empty.')
-    setBusy(true)
-    try {
-      await updateDoc(doc(db, 'users', user.uid), { name: name.trim() })
-      await updateProfile(auth.currentUser, { displayName: name.trim() })
-      toast('Name updated successfully.', 'success')
-      onClose()
-    } catch {
-      setError('Could not update name. Please try again.')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function handleDelete(e) {
-    e.preventDefault()
-    setError('')
-    if (!phone.trim()) return setError('Enter your phone number to confirm.')
-    setBusy(true)
-    try {
-      const cleanPhone = normalizePhone(phone)
-      const credential = EmailAuthProvider.credential(user.email, cleanPhone)
-      await reauthenticateWithCredential(auth.currentUser, credential)
-      await deleteDoc(doc(db, 'users', user.uid))
-      await deleteUser(auth.currentUser)
-      toast('Your account has been deleted.', 'info')
-      navigate('/', { replace: true })
-    } catch (err) {
-      if (
-        err.code === 'auth/wrong-password' ||
-        err.code === 'auth/invalid-credential'
-      ) {
-        setError('Incorrect phone number. Your account was not deleted.')
-      } else {
-        setError('Could not delete account. Please try again.')
-      }
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  if (!open) return null
-
-  const heading = view === 'menu' ? 'Account'
-    : view === 'name'             ? 'Change name'
-    :                               'Delete account'
-
-  return (
-    <>
-      <div onClick={onClose} className="fixed inset-0 bg-black/30 z-40 backdrop-blur-[2px]" />
-
-      <div className="fixed inset-y-0 right-0 z-50 w-full max-w-[340px] bg-white dark:bg-neutral-900 shadow-2xl flex flex-col">
-
-        {/* Panel header */}
-        <div className="flex items-center justify-between px-6 py-5 border-b border-neutral-100 dark:border-neutral-800">
-          <div className="flex items-center gap-2">
-            {view !== 'menu' && (
-              <button
-                onClick={() => { setView('menu'); setError('') }}
-                className="text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 transition mr-1"
-              >
-                <ChevronRight className="h-4 w-4 rotate-180" />
-              </button>
-            )}
-            <h2 className="font-semibold text-neutral-950 dark:text-white text-base">{heading}</h2>
-          </div>
-          <button onClick={onClose} className="text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 transition">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        {/* ── MENU ── */}
-        {view === 'menu' && (
-          <div className="flex-1 overflow-y-auto">
-            {/* Profile summary */}
-            <div className="px-6 py-5 border-b border-neutral-100 dark:border-neutral-800">
-              <div className="flex items-center gap-3">
-                <div className="h-11 w-11 rounded-full bg-black dark:bg-amber-500 text-white dark:text-black flex items-center justify-center text-sm font-semibold shrink-0">
-                  {(profile?.name || user?.email || '?')
-                    .split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()}
-                </div>
-                <div className="min-w-0">
-                  <p className="font-semibold text-neutral-900 dark:text-white text-sm truncate">
-                    {profile?.name || '—'}
-                  </p>
-                  <p className="text-xs text-neutral-400 truncate">{user?.email}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Menu items */}
-            <nav className="px-3 py-3 space-y-0.5">
-              <PanelItem
-                icon={<Pencil className="h-4 w-4" />}
-                label="Change name"
-                onClick={() => { setView('name'); setError('') }}
-              />
-              <PanelItem
-                icon={<User className="h-4 w-4" />}
-                label="Account email"
-                sublabel={user?.email}
-              />
-              {/* Theme toggle */}
-              <PanelItem
-                icon={theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-                label={`Theme: ${theme === 'dark' ? 'Dark' : 'Light'}`}
-                sublabel="Toggle app theme"
-                onClick={toggleTheme}
-              />
-              <div className="pt-2 mt-2 border-t border-neutral-100 dark:border-neutral-800">
-                <PanelItem
-                  icon={<LogOut className="h-4 w-4" />}
-                  label="Sign out"
-                  onClick={onLogout}
-                />
-                <PanelItem
-                  icon={<Trash2 className="h-4 w-4" />}
-                  label="Delete account"
-                  destructive
-                  onClick={() => { setView('delete'); setError(''); setDeleteStep(1) }}
-                />
-              </div>
-            </nav>
-          </div>
-        )}
-
-        {/* ── CHANGE NAME ── */}
-        {view === 'name' && (
-          <form onSubmit={handleSaveName} className="flex-1 flex flex-col px-6 py-6">
-            <label className="block">
-              <span className="text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wide">
-                Full name
-              </span>
-              <input
-                required
-                value={name}
-                onChange={e => setName(e.target.value)}
-                placeholder="Your full name"
-                className="mt-2 w-full border border-neutral-200 dark:border-neutral-700 rounded-xl px-4 py-3 text-sm text-neutral-900 dark:text-white bg-white dark:bg-neutral-800 focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-50 dark:focus:ring-amber-900/20 transition"
-              />
-            </label>
-            {error && <p className="text-sm text-red-600 mt-3">{error}</p>}
-            <div className="flex gap-3 mt-auto pt-6">
-              <button
-                type="button"
-                onClick={() => setView('menu')}
-                className="flex-1 border border-neutral-200 dark:border-neutral-700 rounded-xl py-3 text-sm font-medium text-neutral-600 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800 transition"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={busy}
-                className="flex-1 bg-black dark:bg-amber-500 text-white dark:text-black rounded-xl py-3 text-sm font-semibold hover:bg-neutral-800 dark:hover:bg-amber-400 transition disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                {busy ? <><Loader2 className="h-4 w-4 animate-spin" /> Saving…</> : 'Save'}
-              </button>
-            </div>
-          </form>
-        )}
-
-        {/* ── DELETE ACCOUNT ── */}
-        {view === 'delete' && (
-          <div className="flex-1 flex flex-col px-6 py-6 overflow-y-auto">
-            {deleteStep === 1 && (
-              <>
-                <div className="bg-red-50 dark:bg-red-950/30 border border-red-100 dark:border-red-900 rounded-2xl p-5 space-y-3">
-                  <div className="flex items-center gap-2 text-red-700 dark:text-red-400">
-                    <Trash2 className="h-4 w-4 shrink-0" />
-                    <p className="font-semibold text-sm">This is permanent</p>
-                  </div>
-                  <ul className="text-xs text-red-600 dark:text-red-400 space-y-1.5 list-disc list-inside leading-relaxed">
-                    <li>Your account will be permanently deleted</li>
-                    <li>All course access will be removed immediately</li>
-                    <li>Your progress cannot be recovered</li>
-                    <li>This action cannot be undone</li>
-                  </ul>
-                </div>
-                <div className="flex gap-3 mt-auto pt-6">
-                  <button
-                    onClick={() => setView('menu')}
-                    className="flex-1 border border-neutral-200 dark:border-neutral-700 rounded-xl py-3 text-sm font-medium text-neutral-600 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800 transition"
-                  >
-                    Keep account
-                  </button>
-                  <button
-                    onClick={() => setDeleteStep(2)}
-                    className="flex-1 bg-red-600 text-white rounded-xl py-3 text-sm font-semibold hover:bg-red-700 transition"
-                  >
-                    Continue
-                  </button>
-                </div>
-              </>
-            )}
-
-            {deleteStep === 2 && (
-              <form onSubmit={handleDelete} className="flex flex-col flex-1">
-                <p className="text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed mb-5">
-                  Enter your <strong>phone number</strong> to confirm deletion.
-                  This is the phone number you use to sign in.
-                </p>
-                <label className="block">
-                  <span className="text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wide">
-                    Phone number
-                  </span>
-                  <input
-                    required
-                    type="tel"
-                    value={phone}
-                    onChange={e => setPhone(e.target.value)}
-                    placeholder="08012345678 or +2348012345678"
-                    className="mt-2 w-full border border-red-200 dark:border-red-800 rounded-xl px-4 py-3 text-sm bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white focus:outline-none focus:border-red-400 focus:ring-2 focus:ring-red-50 dark:focus:ring-red-900/20 transition"
-                  />
-                </label>
-                {error && <p className="text-sm text-red-600 mt-3">{error}</p>}
-                <div className="flex gap-3 mt-auto pt-6">
-                  <button
-                    type="button"
-                    onClick={() => setDeleteStep(1)}
-                    className="flex-1 border border-neutral-200 dark:border-neutral-700 rounded-xl py-3 text-sm font-medium text-neutral-600 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800 transition"
-                  >
-                    Back
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={busy}
-                    className="flex-1 bg-red-600 text-white rounded-xl py-3 text-sm font-semibold hover:bg-red-700 transition disabled:opacity-50 flex items-center justify-center gap-2"
-                  >
-                    {busy
-                      ? <><Loader2 className="h-4 w-4 animate-spin" /> Deleting…</>
-                      : 'Delete account'}
-                  </button>
-                </div>
-              </form>
-            )}
-          </div>
-        )}
-      </div>
-    </>
-  )
-}
-
-function PanelItem({ icon, label, sublabel, onClick, destructive = false }) {
-  const base = `w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm text-left transition
-    ${destructive
-      ? 'text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30'
-      : 'text-neutral-700 dark:text-neutral-200 hover:bg-neutral-50 dark:hover:bg-neutral-800'}
-    ${!onClick ? 'cursor-default' : 'cursor-pointer'}`
-
-  return (
-    <button onClick={onClick} className={base} disabled={!onClick}>
-      <span className={`shrink-0 ${destructive ? 'text-red-400' : 'text-neutral-400 dark:text-neutral-500'}`}>
-        {icon}
-      </span>
-      <div className="flex-1 min-w-0">
-        <span className="font-medium">{label}</span>
-        {sublabel && (
-          <p className="text-xs text-neutral-400 truncate mt-0.5">{sublabel}</p>
-        )}
-      </div>
-      {onClick && (
-        <ChevronRight className={`h-4 w-4 shrink-0 ${destructive ? 'text-red-300' : 'text-neutral-300 dark:text-neutral-600'}`} />
-      )}
-    </button>
-  )
-}
+// Account panel moved to shared component: src/components/AccountPanel.jsx
