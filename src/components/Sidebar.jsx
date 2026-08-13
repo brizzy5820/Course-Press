@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ChevronDown, ChevronRight, CheckCircle2, PlayCircle, FileText, X, ArrowLeft, Menu, Moon, Sun } from 'lucide-react'
+import { ChevronDown, ChevronRight, PanelLeft, CheckCircle2, PlayCircle, FileText, X, ArrowLeft, Menu, Moon, Sun } from 'lucide-react'
 import { useTheme } from '../contexts/ThemeContext'
 
 /**
@@ -29,7 +29,7 @@ export default function Sidebar({ course, activeLessonId, completedIds, onSelect
     <>
       {/* Mobile top bar */}
       <div className={`lg:hidden fixed inset-x-0 top-0 z-40 h-14 backdrop-blur border-b flex items-center justify-between px-4
-        ${isDark ? 'bg-neutral-950/90 border-white/[0.08]' : 'bg-white/90 border-neutral-200'}`}>
+        ${isDark ? 'bg-neutral-950/90 border-white/[0.08]' : 'bg-white/90 border-gray-200'}`}>
         {/* Back arrow */}
         <button
           onClick={() => navigate(`/courses/${course.id}`)}
@@ -60,7 +60,7 @@ export default function Sidebar({ course, activeLessonId, completedIds, onSelect
           transform transition-all duration-300 ease-out lg:translate-x-0
           ${isDark
             ? 'bg-zinc-950 text-zinc-300 border-white/[0.06]'
-            : 'bg-white text-neutral-700 border-neutral-700'}
+            : 'bg-white text-neutral-700 '}
           ${open ? 'translate-x-0 shadow-2xl shadow-black/40' : 'translate-x-full'}`}
       >
         {/* Header (desktop) */}
@@ -100,7 +100,7 @@ export default function Sidebar({ course, activeLessonId, completedIds, onSelect
                   ${isDark ? 'bg-white/10 text-white hover:bg-white/15' : 'bg-black/5 text-black hover:bg-black/10'}`}
                 aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
               >
-                <ChevronRight className={`h-4 w-4 transition ${collapsed ? 'rotate-180' : ''}`} />
+                <PanelLeft  className={`h-4 w-4 transition ${collapsed ? 'rotate-180' : ''}`} />
               </button>
             </div>
           </div>

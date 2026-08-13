@@ -277,134 +277,428 @@ export default function CourseDetail() {
           )}
 
           {/* Curriculum */}
-          <h2 className={`font-sans text-2xl font-semibold mt-12 mb-4 ${isDark ? 'text-white' : 'text-black'}`}>What's inside</h2>
-          <div className="space-y-3">
-            {(course.curriculum || []).map((mod, mi) => {
-              const modOpen = openModules.has(mod.id)
-              return (
-                <div key={mod.id} className={`border rounded-2xl overflow-hidden shadow-sm ${isDark ? 'border-amber-400/10 bg-neutral-900' : 'border-zinc-200 bg-white'}`}>
-                  {/* Module header — accordion toggle */}
-                  <button
-                    type="button"
-                    onClick={() => toggleModule(mod.id)}
-                    className={`w-full px-5 py-3 flex items-center gap-2 text-left transition
-                      ${isDark ? 'bg-amber-400/[0.06] hover:bg-amber-400/[0.09]' : 'bg-zinc-100 hover:bg-zinc-100/70'}`}
-                  >
-                    {modOpen
-                      ? <ChevronDown className={`h-3.5 w-3.5 shrink-0 ${isDark ? 'text-neutral-400' : 'text-zinc-500'}`} />
-                      : <ChevronRight className={`h-3.5 w-3.5 shrink-0 ${isDark ? 'text-neutral-400' : 'text-zinc-500'}`} />}
-                    <span className={`font-mono text-[10px] uppercase tracking-wider shrink-0 ${isDark ? 'text-neutral-400' : 'text-zinc-500'}`}>Module {mi + 1}</span>
-                    <span className={isDark ? 'text-neutral-700' : 'text-zinc-300'}>·</span>
-                    <span className={`text-sm font-semibold truncate ${isDark ? 'text-white' : 'text-black'}`}>{mod.title}</span>
-                    <span className={`ml-auto font-mono text-xs shrink-0 ${isDark ? 'text-neutral-400' : 'text-zinc-500'}`}>{mod.lessons?.length || 0} lessons</span>
-                  </button>
+          <h2
+  className={`font-sans text-2xl font-semibold mt-12 mb-4 ${
+    isDark ? 'text-white' : 'text-black'
+  }`}
+>
+  What's inside
+</h2>
 
-                  {modOpen && (
-                    <ul className={`divide-y ${isDark ? 'divide-neutral-800' : 'divide-zinc-100'}`}>
-                      {(mod.lessons || []).map((lesson, li) => {
-                        const isVideo    = lesson.type === 'video'
-                        const isText     = lesson.type === 'text'
-                        const expandable = enrolled && (isVideo || isText)
-                        const lessonOpen = openLessons.has(lesson.id)
+<div className="space-y-5">
+  {(course.curriculum || []).map((mod, mi) => {
+    const modOpen = openModules.has(mod.id)
+    const lessons = mod.lessons || []
 
-                        return (
-                          <li key={lesson.id} className="text-sm">
-                            {/* Lesson row */}
-                            <button
-                              type="button"
-                              onClick={expandable ? () => toggleLesson(lesson.id) : undefined}
-                              className={`w-full px-5 py-3 flex items-center justify-between gap-3 text-left ${expandable ? 'cursor-pointer' : 'cursor-default'} transition
-                                ${expandable ? isDark ? 'hover:bg-neutral-800' : 'hover:bg-zinc-50' : ''}`}
+    return (
+      <section
+        key={mod.id}
+        className={`overflow-hidden rounded-2xl border ${
+          isDark
+            ? 'border-neutral-800 bg-neutral-950'
+            : 'border-zinc-200 bg-white'
+        }`}
+      >
+        {/* =========================
+            MODULE HEADER
+        ========================== */}
+        <button
+          type="button"
+          onClick={() => toggleModule(mod.id)}
+          className={`w-full px-5 py-4 text-left transition ${
+            isDark
+              ? 'hover:bg-neutral-900'
+              : 'hover:bg-zinc-50'
+          }`}
+        >
+          <div className="flex items-start gap-3">
+            {/* Module arrow */}
+            <div className="pt-1 shrink-0">
+              {modOpen ? (
+                <ChevronDown
+                  className={`h-4 w-4 ${
+                    isDark
+                      ? 'text-neutral-400'
+                      : 'text-zinc-500'
+                  }`}
+                />
+              ) : (
+                <ChevronRight
+                  className={`h-4 w-4 ${
+                    isDark
+                      ? 'text-neutral-400'
+                      : 'text-zinc-500'
+                  }`}
+                />
+              )}
+            </div>
+
+            {/* Module content */}
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <span
+                  className={`font-mono text-[13px] uppercase tracking-[0.14em] font-medium ${
+                    isDark
+                      ? 'text-amber-300/70'
+                      : 'text-amber-700'
+                  }`}
+                >
+                  Module {mi + 1}
+                </span>
+
+                <span
+                  className={
+                    isDark
+                      ? 'text-neutral-700'
+                      : 'text-zinc-300'
+                  }
+                >
+                  ·
+                </span>
+
+                <span
+                  className={`font-mono text-[10px] ${
+                    isDark
+                      ? 'text-neutral-500'
+                      : 'text-zinc-400'
+                  }`}
+                >
+                  {lessons.length}{' '}
+                  {lessons.length === 1 ? 'lesson' : 'lessons'}
+                </span>
+              </div>
+
+              {/* Module title */}
+              <h3
+                className={`text-sm font-semibold leading-snug ${
+                  isDark ? 'text-white' : 'text-zinc-900'
+                }`}
+              >
+                {mod.title}
+              </h3>
+            </div>
+          </div>
+        </button>
+
+        {/* =========================
+            LESSONS / SUBMODULES
+        ========================== */}
+        {modOpen && (
+          <div
+            className={`border-t   ${
+              isDark
+                ? 'border-neutral-800'
+                : 'border-zinc-200'
+            }`}
+          >
+            <div className="divide-y divide-transparent">
+              {lessons.map((lesson, li) => {
+                const isVideo = lesson.type === 'video'
+                const isText = lesson.type === 'text'
+
+                const expandable =
+                  enrolled && (isVideo || isText)
+
+                const lessonOpen =
+                  openLessons.has(lesson.id)
+
+                const lessonNumber = `${mi + 1}.${li + 1}`
+
+                return (
+                  <div key={lesson.id}>
+                    {/* =========================
+                        SUBMODULE ROW
+                    ========================== */}
+                    <div
+                      className={`px-5 py-3 transition border-b border-gray-200 ${
+                        expandable
+                          ? isDark
+                            ? 'hover:bg-neutral-900'
+                            : 'hover:bg-zinc-50'
+                          : ''
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        {/* Arrow — far left */}
+                        <button
+                          type="button"
+                          disabled={!expandable}
+                          onClick={() =>
+                            expandable &&
+                            toggleLesson(lesson.id)
+                          }
+                          className={`mt-1.5 w-4 shrink-0 ${
+                            expandable
+                              ? 'cursor-pointer'
+                              : 'cursor-default'
+                          }`}
+                        >
+                          {expandable ? (
+                            lessonOpen ? (
+                              <ChevronDown
+                                className={`h-3.5 w-3.5 ${
+                                  isDark
+                                    ? 'text-neutral-400'
+                                    : 'text-zinc-500'
+                                }`}
+                              />
+                            ) : (
+                              <ChevronRight
+                                className={`h-3.5 w-3.5 ${
+                                  isDark
+                                    ? 'text-neutral-400'
+                                    : 'text-zinc-500'
+                                }`}
+                              />
+                            )
+                          ) : (
+                            <span className="block w-3.5" />
+                          )}
+                        </button>
+
+                        {/* Submodule content */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (expandable) {
+                              toggleLesson(lesson.id)
+                            } else {
+                              goToLesson(lesson)
+                            }
+                          }}
+                          className="min-w-0 flex-1 text-left"
+                        >
+                          {/* Number + media icon + completion */}
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`font-mono text-[10px] font-medium ${
+                                isDark
+                                  ? 'text-amber-300/80'
+                                  : 'text-amber-700'
+                              }`}
                             >
-                              <span className="flex items-center gap-2.5 min-w-0">
-                                {expandable ? (
-                                  lessonOpen
-                                    ? <ChevronDown className={`h-3 w-3 shrink-0 ${isDark ? 'text-neutral-500' : 'text-zinc-400'}`} />
-                                    : <ChevronRight className={`h-3 w-3 shrink-0 ${isDark ? 'text-neutral-500' : 'text-zinc-400'}`} />
-                                ) : (
-                                  <span className="w-3 shrink-0" />
-                                )}
-                                <span className={`font-mono text-[10px] shrink-0 w-6 ${isDark ? 'text-amber-300/80' : 'text-amber-700'}`}>{mi + 1}.{li + 1}</span>
-                                {isVideo
-                                  ? <PlayCircle className={`h-3.5 w-3.5 shrink-0 ${isDark ? 'text-neutral-300' : 'text-zinc-700'}`} />
-                                  : <FileText   className={`h-3.5 w-3.5 shrink-0 ${isDark ? 'text-neutral-300' : 'text-zinc-700'}`} />}
-                                <span className={`truncate ${isDark ? 'text-neutral-100' : 'text-black'}`}>{lesson.title}</span>
-                              </span>
-                              <span className="flex items-center gap-2 shrink-0">
-                                {!enrolled && <Lock className={`h-3 w-3 ${isDark ? 'text-neutral-500' : 'text-zinc-400'}`} />}
-                                {lesson.durationMin && (
-                                  <span className={`font-mono text-xs ${isDark ? 'text-neutral-500' : 'text-zinc-500'}`}>{lesson.durationMin}m</span>
-                                )}
-                              </span>
-                            </button>
+                              {lessonNumber}
+                            </span>
 
-                            {/* Expanded panel */}
-                            {expandable && lessonOpen && (
-                              <div className={`px-5 pb-5 pt-1 ${isDark ? 'bg-neutral-900' : ''}`}>
-                                {isVideo && (
-                                  <div className="w-full">
-                                    {lesson.videoUrl ? (
-                                      <video
-                                        controls
-                                        preload="metadata"
-                                        poster={lesson.thumbnail || undefined}
-                                        className={`w-full rounded-lg aspect-video ${isDark ? 'bg-neutral-950' : 'bg-black'}`}
-                                      >
-                                        <source src={lesson.videoUrl} />
-                                        Your browser doesn't support embedded video.
-                                      </video>
-                                    ) : lesson.embedUrl ? (
-                                      <iframe
-                                        src={lesson.embedUrl}
-                                        className="w-full aspect-video rounded-lg border-0"
-                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                        allowFullScreen
-                                      />
-                                    ) : lesson.youtubeId ? (
-                                      <VideoPlayer youtubeId={lesson.youtubeId} onEnded={() => {}} />
-                                    ) : (
-                                      <div className={`w-full aspect-video rounded-lg flex flex-col items-center justify-center gap-2 ${isDark ? 'bg-neutral-800' : 'bg-zinc-900'}`}>
-                                        <PlayCircle className="h-9 w-9 text-white/60" />
-                                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/70">Coming soon</p>
-                                      </div>
-                                    )}
-                                    <button
-                                      type="button"
-                                      onClick={() => goToLesson(lesson)}
-                                      className={`mt-2 inline-flex items-center gap-1.5 text-xs font-medium transition
-                                        ${isDark ? 'text-neutral-400 hover:text-white' : 'text-zinc-600 hover:text-black'}`}
-                                    >
-                                      Full view <ExternalLink className="h-3 w-3" />
-                                    </button>
-                                  </div>
-                                )}
+                            {isVideo ? (
+                              <PlayCircle
+                                className={`h-3.5 w-3.5 ${
+                                  isDark
+                                    ? 'text-neutral-300'
+                                    : 'text-zinc-600'
+                                }`}
+                              />
+                            ) : (
+                              <FileText
+                                className={`h-3.5 w-3.5 ${
+                                  isDark
+                                    ? 'text-neutral-300'
+                                    : 'text-zinc-600'
+                                }`}
+                              />
+                            )}
 
-                                {isText && lesson.content && (
-                                  <div>
-                                    <p className={`text-xs leading-relaxed ${isDark ? 'text-neutral-400' : 'text-zinc-600'}`}>
-                                      {truncateHalf(lesson.content)}
-                                    </p>
-                                    <button
-                                      type="button"
-                                      onClick={() => goToLesson(lesson)}
-                                      className={`mt-2 inline-flex items-center gap-1.5 text-xs font-medium transition
-                                        ${isDark ? 'text-neutral-400 hover:text-white' : 'text-zinc-600 hover:text-black'}`}
-                                    >
-                                      Full view <ExternalLink className="h-3 w-3" />
-                                    </button>
-                                  </div>
-                                )}
+                            <span
+                              className={`text-[10px] uppercase tracking-wider ${
+                                isDark
+                                  ? 'text-neutral-500'
+                                  : 'text-zinc-400'
+                              }`}
+                            >
+                              {isVideo
+                                ? 'Video'
+                                : 'Reading'}
+                            </span>
+                          </div>
+
+                          {/* Submodule title */}
+                          <h4
+                            className={`mt-1 text-sm font-semibold leading-snug break-words ${
+                              isDark
+                                ? 'text-neutral-100'
+                                : 'text-zinc-900'
+                            }`}
+                          >
+                            {lesson.title}
+                          </h4>
+
+                          {/* Metadata */}
+                          <div
+                            className={`mt-1 flex items-center gap-2 font-mono text-[10px] ${
+                              isDark
+                                ? 'text-neutral-500'
+                                : 'text-zinc-400'
+                            }`}
+                          >
+                            {lesson.topicCount != null && (
+                              <span>
+                                {lesson.topicCount}{' '}
+                                {lesson.topicCount === 1
+                                  ? 'Topic'
+                                  : 'Topics'}
+                              </span>
+                            )}
+
+                            {lesson.durationMin && (
+                              <>
+                                <span>·</span>
+                                <span>
+                                  {lesson.durationMin}m
+                                </span>
+                              </>
+                            )}
+                          </div>
+                        </button>
+
+                        {/* Completion / lock */}
+                        <div className="shrink-0 pt-1">
+                          {!enrolled ? (
+                            <Lock
+                              className={`h-3.5 w-3.5 ${
+                                isDark
+                                  ? 'text-neutral-600'
+                                  : 'text-zinc-400'
+                              }`}
+                            />
+                          ) : lesson.completed ? (
+                            <div
+                              className={`flex h-5 w-5 items-center justify-center rounded-full ${
+                                isDark
+                                  ? 'bg-white text-neutral-900'
+                                  : 'bg-zinc-900 text-white'
+                              }`}
+                            >
+                              <Check className="h-3 w-3" />
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* =========================
+                        EXPANDED CONTENT
+                    ========================== */}
+                    {expandable && lessonOpen && (
+                      <div
+                        className={`px-5 pb-4 ${
+                          isDark
+                            ? 'bg-neutral-950'
+                            : 'bg-white'
+                        }`}
+                      >
+                        {/* FULL-WIDTH VIDEO / CONTENT */}
+                        {isVideo && (
+                          <div className="w-full">
+                            {lesson.videoUrl ? (
+                              <video
+                                controls
+                                preload="metadata"
+                                poster={
+                                  lesson.thumbnail ||
+                                  undefined
+                                }
+                                className={`block w-full aspect-video rounded-lg ${
+                                  isDark
+                                    ? 'bg-neutral-950'
+                                    : 'bg-black'
+                                }`}
+                              >
+                                <source
+                                  src={lesson.videoUrl}
+                                />
+                                Your browser doesn't support
+                                embedded video.
+                              </video>
+                            ) : lesson.embedUrl ? (
+                              <iframe
+                                src={lesson.embedUrl}
+                                className="block w-full aspect-video rounded-lg border-0"
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                allowFullScreen
+                              />
+                            ) : lesson.youtubeId ? (
+                              <div className="w-full">
+                                <VideoPlayer
+                                  youtubeId={lesson.youtubeId}
+                                  onEnded={() => {}}
+                                />
+                              </div>
+                            ) : (
+                              <div
+                                className={`w-full aspect-video rounded-lg flex flex-col items-center justify-center gap-2 ${
+                                  isDark
+                                    ? 'bg-neutral-800'
+                                    : 'bg-zinc-900'
+                                }`}
+                              >
+                                <PlayCircle className="h-9 w-9 text-white/60" />
+
+                                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/70">
+                                  Coming soon
+                                </p>
                               </div>
                             )}
-                          </li>
-                        )
-                      })}
-                    </ul>
-                  )}
-                </div>
-              )
-            })}
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                goToLesson(lesson)
+                              }
+                              className={`mt-2 inline-flex items-center gap-1.5 text-xs font-medium transition ${
+                                isDark
+                                  ? 'text-neutral-400 hover:text-white'
+                                  : 'text-zinc-600 hover:text-black'
+                              }`}
+                            >
+                              Open full lesson
+                              <ExternalLink className="h-3 w-3" />
+                            </button>
+                          </div>
+                        )}
+
+                        {/* TEXT LESSON */}
+                        {isText && lesson.content && (
+                          <div className="w-full">
+                            <p
+                              className={`text-xs leading-relaxed ${
+                                isDark
+                                  ? 'text-neutral-400'
+                                  : 'text-zinc-600'
+                              }`}
+                            >
+                              {truncateHalf(
+                                lesson.content
+                              )}
+                            </p>
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                goToLesson(lesson)
+                              }
+                              className={`mt-2 inline-flex items-center gap-1.5 text-xs font-medium transition ${
+                                isDark
+                                  ? 'text-neutral-400 hover:text-white'
+                                  : 'text-zinc-600 hover:text-black'
+                              }`}
+                            >
+                              Open full lesson
+                              <ExternalLink className="h-3 w-3" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
           </div>
+        )}
+      </section>
+    )
+  })}
+</div>
 
           {/* CTA */}
           <div id="checkout" className={`mt-14 border-t pt-10 ${isDark ? 'border-neutral-800' : 'border-amber-200'}`}>

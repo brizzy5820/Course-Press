@@ -83,29 +83,10 @@ export default function CoursePlayer() {
         <div className={`min-h-screen transition-colors duration-200 ${bgClass}`}>
           <div className="max-w-3xl mx-auto px-5 sm:px-8 py-8 lg:py-12">
 
-            {/* Back + breadcrumb */}
-            <div className={`flex items-center gap-3 mb-8 mt-8 lg:mt-0`}>
-              <Link
-                to={`/courses/${courseId}`}
-                className={`inline-flex items-center gap-1.5 text-xs font-medium transition
-                  ${isDarkText ? 'text-slate-400 hover:text-slate-200' : isDark ? 'text-neutral-400 hover:text-neutral-200' : 'text-slate-400 hover:text-slate-600'}`}
-              >
-                <ArrowLeft className="h-3.5 w-3.5" />
-                Back to course
-              </Link>
-              {activeLesson && (
-                <>
-                  <span className={`text-xs ${isDarkText ? 'text-slate-700' : isDark ? 'text-neutral-700' : 'text-slate-300'}`}>/</span>
-                  <span className={`text-xs ${isDarkText ? 'text-slate-500' : isDark ? 'text-neutral-500' : 'text-slate-400'}`}>
-                    Module {activeLesson.moduleIndex}: {activeLesson.moduleTitle}
-                  </span>
-                </>
-              )}
-            </div>
-
             {/* Lesson header */}
             <div className="mb-6">
               <div className="flex items-center gap-2 mb-2">
+                <span className="text-xs font-medium">Module</span>
                 <span className="font-mono text-xs font-semibold text-amber-600 bg-amber-50 dark:bg-amber-900/20 px-2 py-0.5 rounded">
                   {activeLesson?.lessonNumber}
                 </span>
@@ -121,14 +102,14 @@ export default function CoursePlayer() {
                   </span>
                 )}
               </div>
-              <h1 className={`text-2xl sm:text-3xl font-bold leading-tight tracking-tight
+              <h2 className={`text-xl font-bold leading-tight tracking-tight
                 ${isDarkText ? 'text-white' : isDark ? 'text-white' : 'text-slate-900'}`}>
                 {activeLesson?.title}
-              </h1>
+              </h2>
             </div>
 
             {/* Content */}
-            <div  className="mt-6">
+            <div  className="mt-10">
               {activeLesson?.type === 'video' ? (
                 <VideoPlayer youtubeId={activeLesson.youtubeId} onEnded={() => {}} />
               ) : (
@@ -193,7 +174,7 @@ export default function CoursePlayer() {
               <button
                 onClick={() => goTo(lessonIdx - 1)}
                 disabled={!hasPrev}
-                className={`inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium transition
+                className={`inline-flex items-center gap-1.5 px-4 py-2.5 bg-gray-200 rounded-lg text-sm font-medium transition
                   ${hasPrev
                     ? isDark
                       ? 'text-neutral-300 hover:bg-white/5 border border-neutral-700'
@@ -205,7 +186,7 @@ export default function CoursePlayer() {
               </button>
 
               {/* Mark complete */}
-              <button
+              {/* <button
                 onClick={toggleComplete}
                 className={`inline-flex sm:order-2 items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition
                   ${isDoneLesson
@@ -216,7 +197,7 @@ export default function CoursePlayer() {
               >
                 {isDoneLesson && <CheckCircle2 className="h-4 w-4" />}
                 {isDoneLesson ? 'Completed' : 'Mark complete'}
-              </button>
+              </button> */}
 
               {/* Next */}
               <button
