@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ChevronDown, ChevronRight, PanelLeft, CheckCircle2, PlayCircle, FileText, X, ArrowLeft, Menu, Moon, Sun } from 'lucide-react'
+import { ChevronDown, ChevronRight, PanelLeft, CheckCircle2, PlayCircle, FileText, X, ArrowLeft, Menu, Moon, Sun, BookOpen, LayoutDashboard, Shield } from 'lucide-react'
 import { useTheme } from '../contexts/ThemeContext'
-
+import { useAuth } from '../contexts/AuthContext'
 /**
  * Design system note (shared across Sidebar / Dashboard / CourseDetail):
  *   - ink:      zinc-950/900        → headings, primary text
@@ -16,28 +16,64 @@ import { useTheme } from '../contexts/ThemeContext'
  * give that <main> a matching `pt-14 lg:pt-0` so content doesn't sit under it.
  */
 
-export default function Sidebar({ course, activeLessonId, completedIds, onSelect, open, onToggle }) {
+export default function Sidebar({
+  course,
+  activeLessonId,
+  completedIds,
+  onSelect,
+  open,
+  onToggle,
+  topLink = null,
+  onBack = null,
+  backPath = null,
+  desktopVisible = true,
+}) {
+
+  const { user, isAdmin } = useAuth()
   const totalLessons    = (course.curriculum || []).reduce((s, m) => s + (m.lessons?.length || 0), 0)
   const completedCount  = completedIds.length
   const progressPercent = totalLessons ? Math.round((completedCount / totalLessons) * 100) : 0
   const { theme, toggleTheme } = useTheme()
   const [collapsed, setCollapsed] = useState(false)
-  const navigate        = useNavigate()
-  const isDark          = theme === 'dark'
+  const navigate = useNavigate()
+  const isDark = theme === 'dark'
+  const navItems = [
+    { to: '/', label: 'Browse', icon: BookOpen },
+    user && { to: '/dashboard', label: 'My Library', icon: LayoutDashboard },
+    isAdmin && { to: '/admin', label: 'Admin', icon: Shield },
+  ].filter(Boolean)
 
+  const handleBack = () => {
+    if (onBack) return onBack()
+    if (backPath) return navigate(backPath)
+    navigate(`/courses/${course.id}`)
+  }
   return (
     <>
       {/* Mobile top bar */}
-      <div className={`lg:hidden fixed inset-x-0 top-0 z-40 h-14 backdrop-blur border-b flex items-center justify-between px-4
-        ${isDark ? 'bg-neutral-950/90 border-white/[0.08]' : 'bg-white/90 border-gray-200'}`}>
+      <div
+        className={`lg:hidden fixed inset-x-0 top-0 z-40 h-14 backdrop-blur border-b flex items-center justify-between px-4
+        ${isDark ? "bg-neutral-950/90 border-white/[0.08]" : "bg-transparent border-gray-200"}`}
+      >
         {/* Back arrow */}
         <button
-          onClick={() => navigate(`/courses/${course.id}`)}
+          onClick={handleBack}
           aria-label="Go back"
           className={`shrink-0 h-9 w-9 rounded-lg flex items-center justify-center transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/60
-            ${isDark ? 'text-zinc-400 hover:text-white hover:bg-white/[0.06]' : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100'}`}
+            ${isDark ? "text-zinc-400 hover:text-white hover:bg-white/[0.06]" : "text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100"}`}
         >
           <ArrowLeft className="h-4.5 w-4.5" />
+        </button>
+       <div className='flex item-center gap-3'>
+       
+        <button
+          type="button"
+          onClick={toggleTheme}
+          aria-label="Toggle theme"
+          className={`inline-flex h-9 w-9 items-center justify-center rounded-full border transition
+                ${isDark ? "border-neutral-800 text-neutral-300 hover:border-amber-400/30 hover:text-amber-300" : "border-neutral-200 text-neutral-600 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700"}`}
+        >
+          {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </button>
 
         {/* Hamburger — opens RIGHT sidebar */}
@@ -46,38 +82,49 @@ export default function Sidebar({ course, activeLessonId, completedIds, onSelect
           aria-label="Toggle course contents"
           aria-expanded={open}
           className={`shrink-0 h-9 w-9 rounded-lg flex items-center justify-center transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/60
-            ${isDark ? 'text-zinc-400 hover:text-white hover:bg-white/[0.06]' : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100'}`}
+            ${isDark ? "text-zinc-400 hover:text-white hover:bg-white/[0.06]" : "text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100"}`}
         >
-          {open ? <X className="h-4.5 w-4.5" /> : <Menu className="h-4.5 w-4.5" />}
+          {open ? (
+            <X className="h-4.5 w-4.5" />
+          ) : (
+            <Menu className="h-4.5 w-4.5" />
+          )}
         </button>
+       </div>
       </div>
 
       {/* Sidebar panel: mobile drawer on the right, fixed course rail on desktop */}
       <aside
-        className={`fixed inset-y-0 right-0 lg:left-0 lg:right-auto z-40 flex flex-col overflow-hidden
-          ${collapsed ? 'w-20 lg:w-20' : 'w-[288px] lg:w-[288px]'} border-l
-          lg:border-l-0 lg:border-r pt-14 lg:pt-0 lg:shadow-2xl
-          transform transition-all duration-300 ease-out lg:translate-x-0
-          ${isDark
-            ? 'bg-zinc-950 text-zinc-300 border-white/[0.06]'
-            : 'bg-white text-neutral-700 '}
-          ${open ? 'translate-x-0 shadow-2xl shadow-black/40' : 'translate-x-full'}`}
+        className={`fixed inset-y-0 right-0 z-40 flex flex-col overflow-hidden border-l
+          ${collapsed ? "w-[288px]" : "w-[288px]"} pt-8
+          transform transition-all duration-300 ease-out
+          ${desktopVisible ? "lg:left-0 lg:right-auto lg:border-l-0 lg:border-r lg:pt-0 lg:shadow-2xl lg:translate-x-0" : "lg:hidden"}
+          ${
+            isDark
+              ? "bg-zinc-950 text-zinc-300 border-white/[0.06]"
+              : "bg-white text-neutral-700 "
+          }
+          ${open ? "translate-x-0 shadow-2xl shadow-black/40" : "translate-x-full"}`}
       >
         {/* Header (desktop) */}
-        <div className={`hidden lg:flex   flex-col px-6 pt-6 pb-5 border-b flex-shrink-0 ${isDark ? 'border-white/[0.06]' : 'border-neutral-200'}`}>
+        <div
+          className={`hidden lg:flex   flex-col px-6 pt-6 pb-5 border-b flex-shrink-0 ${isDark ? "border-white/[0.06]" : "border-neutral-200"}`}
+        >
           <div className="flex items-start justify-between gap-3">
             {!collapsed && (
               <div>
                 <Link
                   to="/dashboard"
                   className={`inline-flex items-center gap-1.5 text-[11px] font-medium transition mb-4 group
-                    ${isDark ? 'text-zinc-500 hover:text-amber-400' : 'text-neutral-400 hover:text-amber-600'}`}
+                    ${isDark ? "text-zinc-500 hover:text-amber-400" : "text-neutral-400 hover:text-amber-600"}`}
                 >
                   <ArrowLeft className="h-3 w-3 group-hover:-translate-x-0.5 transition" />
                   My library
                 </Link>
-                <h2 className={`font-semibold text-[16px] leading-snug line-clamp-2 tracking-tight
-                  ${isDark ? 'text-white' : 'text-neutral-950'}`}>
+                <h2
+                  className={`font-semibold text-[16px] leading-snug line-clamp-2 tracking-tight
+                  ${isDark ? "text-white" : "text-neutral-950"}`}
+                >
                   {course.title}
                 </h2>
               </div>
@@ -88,30 +135,44 @@ export default function Sidebar({ course, activeLessonId, completedIds, onSelect
                 type="button"
                 onClick={toggleTheme}
                 className={`inline-flex items-center justify-center h-9 w-9 rounded-xl transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/60
-                  ${isDark ? 'bg-white/10 text-white hover:bg-white/15' : 'bg-black/5 text-black hover:bg-black/10'}`}
+                  ${isDark ? "bg-white/10 text-white hover:bg-white/15" : "bg-black/5 text-black hover:bg-black/10"}`}
                 aria-label="Toggle theme"
               >
-                {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                {isDark ? (
+                  <Sun className="h-4 w-4" />
+                ) : (
+                  <Moon className="h-4 w-4" />
+                )}
               </button>
               <button
                 type="button"
-                onClick={() => setCollapsed(c => !c)}
+                onClick={() => setCollapsed((c) => !c)}
                 className={`inline-flex items-center justify-center h-9 w-9 rounded-xl transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/60
-                  ${isDark ? 'bg-white/10 text-white hover:bg-white/15' : 'bg-black/5 text-black hover:bg-black/10'}`}
-                aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                  ${isDark ? "bg-white/10 text-white hover:bg-white/15" : "bg-black/5 text-black hover:bg-black/10"}`}
+                aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
               >
-                <PanelLeft  className={`h-4 w-4 transition ${collapsed ? 'rotate-180' : ''}`} />
+                <PanelLeft
+                  className={`h-4 w-4 transition ${collapsed ? "rotate-180" : ""}`}
+                />
               </button>
             </div>
           </div>
 
           {!collapsed && (
-            <div className="mt-4">
+            <div className="mt-1">
               <div className="flex justify-between items-center mb-2">
-                <span className={`text-xs ${isDark ? 'text-zinc-500' : 'text-neutral-400'}`}>{completedCount} of {totalLessons} lessons</span>
-                <span className="text-xs font-semibold text-amber-700 tabular-nums">{progressPercent}%</span>
+                <span
+                  className={`text-xs ${isDark ? "text-zinc-500" : "text-neutral-400"}`}
+                >
+                  {completedCount} of {totalLessons} lessons
+                </span>
+                <span className="text-xs font-semibold text-amber-700 tabular-nums">
+                  {progressPercent}%
+                </span>
               </div>
-              <div className={`h-[5px] rounded-full overflow-hidden ${isDark ? 'bg-white/[0.07]' : 'bg-neutral-100'}`}>
+              <div
+                className={`h-[5px] rounded-full overflow-hidden ${isDark ? "bg-white/[0.07]" : "bg-neutral-100"}`}
+              >
                 <div
                   className="h-full bg-gradient-to-r from-amber-500 to-amber-400 rounded-full transition-all duration-700"
                   style={{ width: `${progressPercent}%` }}
@@ -122,23 +183,37 @@ export default function Sidebar({ course, activeLessonId, completedIds, onSelect
         </div>
 
         {/* Compact header (mobile, inside the drawer, below the fixed top bar) */}
-        <div className={`lg:hidden px-5 py-4 border-b flex-shrink-0 ${isDark ? 'border-white/[0.06]' : 'border-neutral-200'}`}>
-          <div className="flex items-center justify-between gap-3 mb-3">
-            <Link to="/dashboard" className={`inline-flex items-center gap-1.5 text-[11px] font-medium
-              ${isDark ? 'text-zinc-500' : 'text-neutral-400'}`}>
-              <ArrowLeft className="h-3 w-3" /> My library
-            </Link>
-            <button
-              type="button"
-              onClick={toggleTheme}
-              className={`inline-flex items-center justify-center h-9 w-9 rounded-xl transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/60
-                ${isDark ? 'bg-white/10 text-white hover:bg-white/15' : 'bg-black/5 text-black hover:bg-black/10'}`}
-              aria-label="Toggle theme"
+        <div
+          className={`lg:hidden px-5 pb-4 border-b flex-shrink-0 ${isDark ? "border-white/[0.06]" : "border-neutral-200"}`}
+        >
+          {topLink && (
+            <Link
+              to={topLink.to}
+              onClick={onToggle}
+              className={`mb-3 inline-flex items-center gap-2 text-xs font-semibold tracking-wide uppercase ${isDark ? "text-amber-300 hover:text-amber-200" : "text-amber-700 hover:text-amber-800"}`}
             >
-              {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-            </button>
+              {topLink.label}
+            </Link>
+          )}
+
+          <div className="flex-1 overflow-y-auto mb-3">
+            {navItems.map(({ to, label, icon: Icon }) => (
+              <Link
+                key={to}
+                to={to}
+                onClick={onToggle}
+                className={`flex items-center gap-3 rounded-xl py-2 text-sm font-semibold transition
+                  ${isDark ? "text-white hover:bg-white/10" : "text-neutral-900 hover:bg-amber-50"}`}
+              >
+                <Icon className="h-4 w-4" />
+                {label}
+              </Link>
+            ))}
           </div>
-          <div className={`h-[5px] rounded-full overflow-hidden ${isDark ? 'bg-white/[0.07]' : 'bg-neutral-100'}`}>
+
+          <div
+            className={`h-[5px] rounded-full overflow-hidden ${isDark ? "bg-white/[0.07]" : "bg-neutral-100"}`}
+          >
             <div
               className="h-full bg-gradient-to-r from-amber-500 to-amber-400 rounded-full transition-all duration-700"
               style={{ width: `${progressPercent}%` }}
@@ -147,8 +222,10 @@ export default function Sidebar({ course, activeLessonId, completedIds, onSelect
         </div>
 
         {/* Module list */}
-        <nav className={`flex-1 overflow-y-auto py-2 ${collapsed ? 'lg:hidden' : ''} [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full
-          ${isDark ? '[&::-webkit-scrollbar-thumb]:bg-white/10' : '[&::-webkit-scrollbar-thumb]:bg-neutral-200'}`}>
+        <nav
+          className={`flex-1 overflow-y-auto py-2 ${collapsed ? "lg:hidden" : ""} [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full
+          ${isDark ? "[&::-webkit-scrollbar-thumb]:bg-white/10" : "[&::-webkit-scrollbar-thumb]:bg-neutral-200"}`}
+        >
           {(course.curriculum || []).map((mod, mi) => (
             <ModuleBlock
               key={mod.id}
@@ -167,11 +244,11 @@ export default function Sidebar({ course, activeLessonId, completedIds, onSelect
       {open && (
         <div
           onClick={onToggle}
-          className={`fixed inset-0 backdrop-blur-[2px] z-30 lg:hidden ${isDark ? 'bg-black/60' : 'bg-black/30'}`}
+          className={`fixed inset-0 backdrop-blur-[2px] z-30 lg:hidden ${isDark ? "bg-black/60" : "bg-black/30"}`}
         />
       )}
     </>
-  )
+  );
 }
 
 function ModuleBlock({ mod, moduleIndex, activeLessonId, completedIds, onSelect, isDark }) {
@@ -194,13 +271,24 @@ function ModuleBlock({ mod, moduleIndex, activeLessonId, completedIds, onSelect,
           <ChevronDown className="h-3.5 w-3.5" />
         </span>
         <div className="flex-1 min-w-0">
-          <p className={`text-[10px] font-medium uppercase tracking-wider font-mono ${isDark ? 'text-zinc-600' : 'text-neutral-400'}`}>
+          <p className={`text-[12px] font-medium uppercase tracking-wider font-mono ${isDark ? 'text-zinc-600' : 'text-neutral-500'}`}>
             Module {moduleIndex}
           </p>
-          <p className={`text-[13px] font-semibold mt-0.5 truncate ${isDark ? 'text-zinc-100' : 'text-neutral-900'}`}>{mod.title}</p>
+          <p className={`text-[13px] font-semibold mt-0.5 truncate ${
+            allDone
+              ? isDark
+                ? 'text-emerald-400 line-through decoration-2 decoration-emerald-500'
+                : 'text-emerald-600 line-through decoration-2 decoration-emerald-500'
+              : isDark ? 'text-zinc-100' : 'text-neutral-900'
+          }`}>
+            {mod.title}
+          </p>
         </div>
         {allDone ? (
-          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+          <div className="flex items-center gap-1.5 shrink-0">
+            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+            <span className="text-[10px] font-medium tabular-nums font-mono text-emerald-500">{lessons.length}</span>
+          </div>
         ) : (
           <span className={`text-[10px] font-medium shrink-0 tabular-nums font-mono ${isDark ? 'text-zinc-600' : 'text-neutral-400'}`}>
             {doneCount}/{lessons.length}
@@ -245,7 +333,9 @@ function ModuleBlock({ mod, moduleIndex, activeLessonId, completedIds, onSelect,
                       ${isActive
                         ? isDark ? 'text-white font-medium' : 'text-amber-700 font-medium'
                         : isDoneL
-                          ? isDark ? 'text-zinc-500' : 'text-neutral-400'
+                          ? isDark
+                            ? 'text-emerald-400 line-through decoration-2 decoration-emerald-500'
+                            : 'text-emerald-600 line-through decoration-2 decoration-emerald-500'
                           : isDark ? 'text-zinc-300' : 'text-neutral-700'}`}>
                       {lesson.title}
                     </p>

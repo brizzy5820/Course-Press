@@ -103,7 +103,13 @@ export default function CoursePlayer() {
                 )}
               </div>
               <h2 className={`text-xl font-bold leading-tight tracking-tight
-                ${isDarkText ? 'text-white' : isDark ? 'text-white' : 'text-slate-900'}`}>
+                ${isDoneLesson
+                  ? isDarkText
+                    ? 'text-emerald-400 line-through decoration-2 decoration-emerald-500'
+                    : isDark
+                      ? 'text-emerald-400 line-through decoration-2 decoration-emerald-500'
+                      : 'text-emerald-600 line-through decoration-2 decoration-emerald-500'
+                  : isDarkText ? 'text-white' : isDark ? 'text-white' : 'text-slate-900'}`}>
                 {activeLesson?.title}
               </h2>
             </div>
@@ -164,6 +170,18 @@ export default function CoursePlayer() {
                   </ul>
                 </div>
               )}
+               <button
+                onClick={toggleComplete}
+                className={`inline-flex sm:order-2 mt-4 items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition
+                  ${isDoneLesson
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                    : isDark
+                      ? 'bg-amber-500 text-black hover:bg-amber-400'
+                      : 'bg-transparent border border-slate-700 text-black hover:bg-slate-700 hover:text-white'}`}
+              >
+                {isDoneLesson && <CheckCircle2 className="h-4 w-4" />}
+                {isDoneLesson ? 'Completed' : 'Mark complete'}
+              </button>
             </div>
 
             {/* Bottom nav: prev / mark complete / next */}
@@ -186,18 +204,7 @@ export default function CoursePlayer() {
               </button>
 
               {/* Mark complete */}
-              {/* <button
-                onClick={toggleComplete}
-                className={`inline-flex sm:order-2 items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition
-                  ${isDoneLesson
-                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                    : isDark
-                      ? 'bg-amber-500 text-black hover:bg-amber-400'
-                      : 'bg-slate-900 text-white hover:bg-slate-700'}`}
-              >
-                {isDoneLesson && <CheckCircle2 className="h-4 w-4" />}
-                {isDoneLesson ? 'Completed' : 'Mark complete'}
-              </button> */}
+             
 
               {/* Next */}
               <button

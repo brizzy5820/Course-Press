@@ -85,7 +85,7 @@ export default function TopNav({ maxWidth = 'max-w-5xl', showBack = false }) {
               type="button"
               onClick={toggleTheme}
               aria-label="Toggle theme"
-              className={`hidden sm:inline-flex h-9 w-9 items-center justify-center rounded-full border transition
+              className={`inline-flex h-9 w-9 items-center justify-center rounded-full border transition
                 ${isDark ? 'border-neutral-800 text-neutral-300 hover:border-amber-400/30 hover:text-amber-300' : 'border-neutral-200 text-neutral-600 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700'}`}
             >
               {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}

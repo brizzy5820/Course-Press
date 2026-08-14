@@ -94,7 +94,31 @@ body {
     }
   }
 }
+@keyframes digitalDot {
+  0%,
+  100% {
+    opacity: 0.2;
+    transform: translateY(-2px);
+  }
 
+  50% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes digitalArrow {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: translateY(-1px);
+  }
+
+  50% {
+    opacity: 1;
+    transform: translateY(3px);
+  }
+}
 /* Force GPU acceleration for animated elements */
 [style*="animation"],
 .preloader-spin,

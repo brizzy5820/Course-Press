@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
+import { ArrowDown } from 'lucide-react'
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -7,11 +8,12 @@ import {
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore'
 import {
   PlayCircle, FileText, Lock, Clock,
-  CheckCircle2, ArrowRight, Loader,
+  CheckCircle2, Check, ArrowRight, Loader,
   ChevronDown, ChevronRight, ExternalLink,
 } from 'lucide-react'
 import { auth, db } from '../firebase'
-import { getCourse, isEnrolled, createPendingOrder } from '../lib/data'
+import { getCourse, isEnrolled, createPendingOrder, getProgress } from '../lib/data'
+import Sidebar from '../components/Sidebar'
 import {
   accountExists,
   writeProfileAndEnrollment,
@@ -86,6 +88,8 @@ export default function CourseDetail() {
   const [submitting,  setSubmitting]  = useState(false)
   const [error,       setError]       = useState('')
   const [paid,        setPaid]        = useState(false)
+  const [completedIds, setCompletedIds] = useState([])
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   // accordion state
   const [openModules, setOpenModules] = useState(() => new Set())
@@ -93,7 +97,10 @@ export default function CourseDetail() {
 
   useEffect(() => { getCourse(courseId).then(setCourse) }, [courseId])
   useEffect(() => {
-    if (user && courseId) isEnrolled(user.uid, courseId).then(setEnrolled)
+    if (user && courseId) {
+      isEnrolled(user.uid, courseId).then(setEnrolled)
+      getProgress(user.uid, courseId).then(p => setCompletedIds(p.completedLessonIds || []))
+    }
   }, [user, courseId])
 
   // open the first module by default once the course loads
@@ -216,17 +223,25 @@ export default function CourseDetail() {
 
   return (
     <div className={`min-h-screen relative overflow-hidden transition-colors duration-200 ${isDark ? 'bg-neutral-950' : 'bg-[#F7F8FA]'}`}>
-      {course.coverImage && (
-        <div className="pointer-events-none w-full absolute right-[-8%] top-28 hidden h-[360px] w-[360px] overflow-hidden rounded-[2rem] opacity-[0.08] blur-[1px] lg:block">
-          {/* <img src='https://images.unsplash.com/photo-1497633762265-9d179a990aa6?q=80&w=1173&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D' alt="" className="h-full w-full object-cover" /> */}
-        </div>
-      )}
+      <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[420px] overflow-hidden sm:h-[500px]">
+        {course.coverImage ? (
+          <img
+            src={course.coverImage}
+            alt=""
+            className="h-full w-full object-cover opacity-[0.40] sm:opacity-[0.52]"
+          />
+        ) : (
+          <div className="h-full w-full bg-[radial-gradient(circle_at_top,_rgba(251,191,36,0.20),_transparent_52%)]" />
+        )}
+        <div className={`absolute inset-0 ${isDark ? 'bg-gradient-to-b from-neutral-950/75 via-neutral-950/90 to-neutral-950' : 'bg-gradient-to-b from-white/75 via-[#F7F8FA]/90 to-[#F7F8FA]'}`} />
+      </div>
 
       <div className="relative z-10">
-        {/* Header — matches dashboard style */}
-        <TopNav maxWidth="max-w-3xl" showBack />
-        <header className={`hidden backdrop-blur-sm border-b sticky top-0 z-10 transition-colors duration-200
-          ${isDark ? 'bg-neutral-900/90 border-neutral-800' : 'bg-white/90 border-zinc-200'}`}>
+        <div className="hidden lg:block">
+          <TopNav maxWidth="max-w-3xl" />
+        </div>
+        <header className={`hidden fixed  backdrop-blur-sm border-b sticky top-0 z-10 transition-colors duration-200
+          ${isDark ? 'bg-neutral-900/90 border-neutral-800' : 'bg-transparent border-zinc-200'}`}>
           <div className="max-w-3xl mx-auto px-6 h-16 flex items-center justify-between">
             <Link to="/" className={`font-bold text-[17px] tracking-tight transition
               ${isDark ? 'text-white' : 'text-black'}`}>CoursePress</Link>
@@ -246,7 +261,7 @@ export default function CourseDetail() {
           </div>
         </header>
 
-        <main className="max-w-3xl mx-auto px-6 py-12">
+        <main className="max-w-3xl mx-auto px-6 mt-6 py-12">
 
           {/* Hero */}
           <p className={`font-mono text-xs uppercase tracking-[0.2em] mb-3 ${isDark ? 'text-neutral-500' : 'text-amber-600'}`}>Course</p>
@@ -256,16 +271,44 @@ export default function CourseDetail() {
           {/* Stats */}
           <div className="flex flex-wrap items-center gap-2 mt-6">
             <StatPill icon={<FileText className="h-3.5 w-3.5" />} label={`${totalLessons} lessons`} isDark={isDark} />
-            <StatPill icon={<Clock className="h-3.5 w-3.5" />} label="Self-paced" isDark={isDark} />
+            {/* <StatPill icon={<Clock className="h-3.5 w-3.5" />} label="Self-paced" isDark={isDark} /> */}
             <StatPill icon={<CheckCircle2 className="h-3.5 w-3.5" />} label="Lifetime access" isDark={isDark} />
           </div>
+   <div
+  className= {`font-sans text-2xl font-semibold mt-5 flex items-cente gap-2 mb-4 ${
+    isDark ? 'text-white' : 'text-black'
+  }`}
+>
+  What's inside <div className="flex justify-center r mt-2">
+  <div className="flex flex-col items-center gap-[3px]">
+    <span
+      className={`h-[2px] w-[2px] rounded-full animate-[digitalDot_1.5s_ease-in-out_infinite] ${
+        isDark ? 'bg-amber-400' : 'bg-black'
+      }`}
+    />
 
+    <span
+      className={`h-[3px] w-[3px] rounded-full animate-[digitalDot_1.5s_ease-in-out_0.15s_infinite] ${
+        isDark ? 'bg-amber-400' : 'bg-black'
+      }`}
+    />
+
+    <ChevronDown
+      className={`h-3.5 w-3.5 animate-[digitalArrow_1.5s_ease-in-out_infinite] ${
+        isDark
+          ? 'text-amber-300 drop-shadow-[0_0_5px_rgba(251,191,36,0.4)]'
+          : 'text-black drop-shadow-[0_0_5px_rgba(0,0,0,0.4)]'
+      }`}
+    />
+  </div>
+</div>
+</div>
           {/* Cover */}
           {course.coverImage && (
             <img
               src={course.coverImage}
               alt={course.title}
-              className="w-full rounded-2xl mt-8 aspect-[16/9] object-cover shadow-sm"
+              className="w-full rounded-2xl mt-4 mb-3 aspect-[16/9] object-cover shadow-sm"
             />
           )}
 
@@ -277,18 +320,13 @@ export default function CourseDetail() {
           )}
 
           {/* Curriculum */}
-          <h2
-  className={`font-sans text-2xl font-semibold mt-12 mb-4 ${
-    isDark ? 'text-white' : 'text-black'
-  }`}
->
-  What's inside
-</h2>
+       
 
 <div className="space-y-5">
   {(course.curriculum || []).map((mod, mi) => {
     const modOpen = openModules.has(mod.id)
     const lessons = mod.lessons || []
+    const isModuleComplete = lessons.length > 0 && lessons.every(lesson => completedIds.includes(lesson.id))
 
     return (
       <section
@@ -366,12 +404,20 @@ export default function CourseDetail() {
                   {lessons.length}{' '}
                   {lessons.length === 1 ? 'lesson' : 'lessons'}
                 </span>
+
+                {isModuleComplete && (
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                )}
               </div>
 
               {/* Module title */}
               <h3
                 className={`text-sm font-semibold leading-snug ${
-                  isDark ? 'text-white' : 'text-zinc-900'
+                  isModuleComplete
+                    ? isDark
+                      ? 'text-emerald-400 line-through decoration-2 decoration-emerald-500'
+                      : 'text-emerald-600 line-through decoration-2 decoration-emerald-500'
+                    : isDark ? 'text-white' : 'text-zinc-900'
                 }`}
               >
                 {mod.title}
@@ -395,6 +441,7 @@ export default function CourseDetail() {
               {lessons.map((lesson, li) => {
                 const isVideo = lesson.type === 'video'
                 const isText = lesson.type === 'text'
+                const isLessonComplete = completedIds.includes(lesson.id)
 
                 const expandable =
                   enrolled && (isVideo || isText)
@@ -410,7 +457,7 @@ export default function CourseDetail() {
                         SUBMODULE ROW
                     ========================== */}
                     <div
-                      className={`px-5 py-3 transition border-b border-gray-200 ${
+                      className={`px-5 py-3 transition border-b border-gray-200 dark:border-neutral-800 ${
                         expandable
                           ? isDark
                             ? 'hover:bg-neutral-900'
@@ -509,14 +556,20 @@ export default function CourseDetail() {
                                 ? 'Video'
                                 : 'Reading'}
                             </span>
+
+                            {isLessonComplete && (
+                              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                            )}
                           </div>
 
                           {/* Submodule title */}
                           <h4
                             className={`mt-1 text-sm font-semibold leading-snug break-words ${
-                              isDark
-                                ? 'text-neutral-100'
-                                : 'text-zinc-900'
+                              isLessonComplete
+                                ? isDark
+                                  ? 'text-emerald-400 line-through decoration-2 decoration-emerald-500'
+                                  : 'text-emerald-600 line-through decoration-2 decoration-emerald-500'
+                                : isDark ? 'text-neutral-100' : 'text-zinc-900'
                             }`}
                           >
                             {lesson.title}
@@ -560,12 +613,12 @@ export default function CourseDetail() {
                                   : 'text-zinc-400'
                               }`}
                             />
-                          ) : lesson.completed ? (
+                          ) : isLessonComplete ? (
                             <div
                               className={`flex h-5 w-5 items-center justify-center rounded-full ${
                                 isDark
-                                  ? 'bg-white text-neutral-900'
-                                  : 'bg-zinc-900 text-white'
+                                  ? 'bg-emerald-500 text-neutral-950'
+                                  : 'bg-emerald-600 text-white'
                               }`}
                             >
                               <Check className="h-3 w-3" />
@@ -580,7 +633,7 @@ export default function CourseDetail() {
                     ========================== */}
                     {expandable && lessonOpen && (
                       <div
-                        className={`px-5 pb-4 ${
+                        className={`px-2 pb-4 ${
                           isDark
                             ? 'bg-neutral-950'
                             : 'bg-white'
@@ -805,6 +858,21 @@ export default function CourseDetail() {
           </div>
         </main>
       </div>
+
+      <Sidebar
+        course={course}
+        activeLessonId={null}
+        completedIds={completedIds}
+        onSelect={lesson => {
+          setSidebarOpen(false)
+          goToLesson(lesson)
+        }}
+        open={sidebarOpen}
+        onToggle={() => setSidebarOpen(open => !open)}
+        topLink={{ to: `/dashboard/${courseId}`, label: 'Open course player' }}
+        onBack={() => navigate(-1)}
+        desktopVisible={false}
+      />
     </div>
   )
 }
