@@ -108,6 +108,7 @@ export default function CourseDetail() {
   const [paid,        setPaid]        = useState(false)
   const [completedIds, setCompletedIds] = useState([])
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
   // accordion state
   const [openModules, setOpenModules] = useState(() => new Set())
@@ -866,6 +867,7 @@ export default function CourseDetail() {
         }}
         open={sidebarOpen}
         onToggle={() => setSidebarOpen(open => !open)}
+        onCollapsedChange={setSidebarCollapsed}
         topLink={{ to: `/dashboard/${courseId}`, label: 'Open course player' }}
         onBack={() => navigate(-1)}
         desktopVisible={false}

@@ -28,6 +28,7 @@ export default function CoursePlayer() {
   const [completedIds, setCompletedIds] = useState([])
   const [activeLesson, setActiveLesson] = useState(null)
   const [sidebarOpen,  setSidebarOpen]  = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
   const lessons = useMemo(() => course ? flattenLessons(course) : [], [course])
 
@@ -79,7 +80,7 @@ export default function CoursePlayer() {
 
   return (
     <div className={`min-h-screen  ${isDark ? 'bg-neutral-950' : 'bg-white'}`}>
-      <main className="min-w-0 overflow-auto pt-14 lg:ml-[288px] lg:pt-0">
+      <main className={`min-w-0 overflow-auto pt-14 lg:pt-0 transition-all duration-300 ${sidebarCollapsed ? "lg:ml-24" : "lg:ml-[288px]"}`}>
         <div className={`min-h-screen transition-colors duration-200 ${bgClass}`}>
           <div className="max-w-5xl mx-auto px-3 sm:px-8 py-8 lg:py-12">
 
@@ -236,6 +237,7 @@ export default function CoursePlayer() {
         onSelect={l => { setActiveLesson(l); setSidebarOpen(false) }}
         open={sidebarOpen}
         onToggle={() => setSidebarOpen(o => !o)}
+        onCollapsedChange={setSidebarCollapsed}
       />
     </div>
   )

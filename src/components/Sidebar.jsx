@@ -23,6 +23,7 @@ export default function Sidebar({
   onSelect,
   open,
   onToggle,
+  onCollapsedChange = null,
   topLink = null,
   onBack = null,
   backPath = null,
@@ -42,6 +43,12 @@ export default function Sidebar({
     user && { to: '/dashboard', label: 'My Library', icon: LayoutDashboard },
     isAdmin && { to: '/admin', label: 'Admin', icon: Shield },
   ].filter(Boolean)
+
+  const toggleCollapsed = () => {
+    const newState = !collapsed
+    setCollapsed(newState)
+    if (onCollapsedChange) onCollapsedChange(newState)
+  }
 
   const handleBack = () => {
     if (onBack) return onBack()
@@ -96,8 +103,9 @@ export default function Sidebar({
       {/* Sidebar panel: mobile drawer on the right, fixed course rail on desktop */}
       <aside
         className={`fixed inset-y-0 right-0 z-40 flex flex-col overflow-hidden border-l
-          ${collapsed ? "w-[288px]" : "w-[288px]"} pt-8
+          w-[288px] pt-8
           transform transition-all duration-300 ease-out
+          ${collapsed ? "lg:w-24" : "lg:w-[288px]"}
           ${desktopVisible ? "lg:left-0 lg:right-auto lg:border-l-0 lg:border-r lg:pt-0 lg:shadow-2xl lg:translate-x-0" : "lg:hidden"}
           ${
             isDark
@@ -108,29 +116,11 @@ export default function Sidebar({
       >
         {/* Header (desktop) */}
         <div
-          className={`hidden lg:flex   flex-col px-6 pt-6 pb-5 border-b flex-shrink-0 ${isDark ? "border-white/[0.06]" : "border-neutral-200"}`}
+          className={`${collapsed ? "hidden lg:flex lg:flex-col lg:items-center lg:justify-center lg:gap-4 lg:px-3 lg:py-6" : "hidden lg:flex flex-col px-6 pt-6 pb-5"} border-b flex-shrink-0 ${isDark ? "border-white/[0.06]" : "border-neutral-200"}`}
         >
-          <div className="flex items-start justify-between gap-3">
-            {!collapsed && (
-              <div>
-                <Link
-                  to="/dashboard"
-                  className={`inline-flex items-center gap-1.5 text-[11px] font-medium transition mb-4 group
-                    ${isDark ? "text-zinc-500 hover:text-amber-400" : "text-neutral-400 hover:text-amber-600"}`}
-                >
-                  <ArrowLeft className="h-3 w-3 group-hover:-translate-x-0.5 transition" />
-                  My library
-                </Link>
-                <h2
-                  className={`font-semibold text-[16px] leading-snug line-clamp-2 tracking-tight
-                  ${isDark ? "text-white" : "text-neutral-950"}`}
-                >
-                  {course.title}
-                </h2>
-              </div>
-            )}
-
-            <div className="flex items-center gap-2">
+          {collapsed ? (
+            <>
+              {/* Collapsed header - icons only */}
               <button
                 type="button"
                 onClick={toggleTheme}
@@ -146,39 +136,84 @@ export default function Sidebar({
               </button>
               <button
                 type="button"
-                onClick={() => setCollapsed((c) => !c)}
+                onClick={toggleCollapsed}
                 className={`inline-flex items-center justify-center h-9 w-9 rounded-xl transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/60
                   ${isDark ? "bg-white/10 text-white hover:bg-white/15" : "bg-black/5 text-black hover:bg-black/10"}`}
-                aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+                aria-label="Expand sidebar"
+                title="Expand sidebar"
               >
-                <PanelLeft
-                  className={`h-4 w-4 transition ${collapsed ? "rotate-180" : ""}`}
-                />
+                <PanelLeft className="h-4 w-4 rotate-180" />
               </button>
-            </div>
-          </div>
+            </>
+          ) : (
+            <>
+              {/* Expanded header */}
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <Link
+                    to="/dashboard"
+                    className={`inline-flex items-center gap-1.5 text-[11px] font-medium transition mb-4 group
+                      ${isDark ? "text-zinc-500 hover:text-amber-400" : "text-neutral-400 hover:text-amber-600"}`}
+                  >
+                    <ArrowLeft className="h-3 w-3 group-hover:-translate-x-0.5 transition" />
+                    My library
+                  </Link>
+                  <h2
+                    className={`font-semibold text-[16px] leading-snug line-clamp-2 tracking-tight
+                    ${isDark ? "text-white" : "text-neutral-950"}`}
+                  >
+                    {course.title}
+                  </h2>
+                </div>
+              </div>
 
-          {!collapsed && (
-            <div className="mt-1">
-              <div className="flex justify-between items-center mb-2">
-                <span
-                  className={`text-xs ${isDark ? "text-zinc-500" : "text-neutral-400"}`}
+              <div className="flex items-center gap-2 absolute top-6 right-6">
+                <button
+                  type="button"
+                  onClick={toggleTheme}
+                  className={`inline-flex items-center justify-center h-9 w-9 rounded-xl transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/60
+                    ${isDark ? "bg-white/10 text-white hover:bg-white/15" : "bg-black/5 text-black hover:bg-black/10"}`}
+                  aria-label="Toggle theme"
                 >
-                  {completedCount} of {totalLessons} lessons
-                </span>
-                <span className="text-xs font-semibold text-amber-700 tabular-nums">
-                  {progressPercent}%
-                </span>
+                  {isDark ? (
+                    <Sun className="h-4 w-4" />
+                  ) : (
+                    <Moon className="h-4 w-4" />
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={toggleCollapsed}
+                  className={`inline-flex items-center justify-center h-9 w-9 rounded-xl transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/60
+                    ${isDark ? "bg-white/10 text-white hover:bg-white/15" : "bg-black/5 text-black hover:bg-black/10"}`}
+                  aria-label="Collapse sidebar"
+                  title="Collapse sidebar"
+                >
+                  <PanelLeft className="h-4 w-4" />
+                </button>
               </div>
-              <div
-                className={`h-[5px] rounded-full overflow-hidden ${isDark ? "bg-white/[0.07]" : "bg-neutral-100"}`}
-              >
+
+              <div className="mt-1 w-full">
+                <div className="flex justify-between items-center mb-2">
+                  <span
+                    className={`text-xs ${isDark ? "text-zinc-500" : "text-neutral-400"}`}
+                  >
+                    {completedCount} of {totalLessons} lessons
+                  </span>
+                  <span className="text-xs font-semibold text-amber-700 tabular-nums">
+                    {progressPercent}%
+                  </span>
+                </div>
                 <div
-                  className="h-full bg-gradient-to-r from-amber-500 to-amber-400 rounded-full transition-all duration-700"
-                  style={{ width: `${progressPercent}%` }}
-                />
+                  className={`h-[5px] rounded-full overflow-hidden ${isDark ? "bg-white/[0.07]" : "bg-neutral-100"}`}
+                >
+                  <div
+                    className="h-full bg-gradient-to-r from-amber-500 to-amber-400 rounded-full transition-all duration-700"
+                    style={{ width: `${progressPercent}%` }}
+                  />
+                </div>
               </div>
-            </div>
+            </>
           )}
         </div>
 
@@ -226,7 +261,7 @@ export default function Sidebar({
           className={`flex-1 overflow-y-auto py-2 ${collapsed ? "lg:hidden" : ""} [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full
           ${isDark ? "[&::-webkit-scrollbar-thumb]:bg-white/10" : "[&::-webkit-scrollbar-thumb]:bg-neutral-200"}`}
         >
-          {(course.curriculum || []).map((mod, mi) => (
+          {!collapsed && (course.curriculum || []).map((mod, mi) => (
             <ModuleBlock
               key={mod.id}
               mod={mod}
