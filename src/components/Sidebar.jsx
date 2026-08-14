@@ -53,7 +53,7 @@ export default function Sidebar({
       {/* Mobile top bar */}
       <div
         className={`lg:hidden fixed inset-x-0 top-0 z-40 h-14 backdrop-blur border-b flex items-center justify-between px-4
-        ${isDark ? "bg-neutral-950/90 border-white/[0.08]" : "bg-transparent border-gray-200"}`}
+        ${isDark ? "bg-neutral-950/90 border-white/[0.08]" : "bg-white border-gray-200"}`}
       >
         {/* Back arrow */}
         <button
