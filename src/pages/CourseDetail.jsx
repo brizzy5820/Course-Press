@@ -75,6 +75,24 @@ function SoundwaveBackground() {
   )
 }
 
+function CourseBackground({ image, isDark }) {
+  return (
+    <div aria-hidden className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
+      {image ? (
+        <img
+          src={image}
+          alt=""
+          className=" w-full object-cover opacity-[0.06] dark:opacity-[0.07]"
+        />
+      ) : (
+        <div className="h-full w-full bg-[radial-gradient(circle_at_top,_rgba(251,191,36,0.22),_transparent_55%)]" />
+      )}
+     
+   
+    </div>
+  )
+}
+
 export default function CourseDetail() {
   const { courseId } = useParams()
   const navigate     = useNavigate()
@@ -222,19 +240,8 @@ export default function CourseDetail() {
   const totalLessons = (course.curriculum || []).reduce((s, m) => s + (m.lessons?.length || 0), 0)
 
   return (
-    <div className={`min-h-screen relative overflow-hidden transition-colors duration-200 ${isDark ? 'bg-neutral-950' : 'bg-[#F7F8FA]'}`}>
-      <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[420px] overflow-hidden sm:h-[500px]">
-        {course.coverImage ? (
-          <img
-            src={course.coverImage}
-            alt=""
-            className="h-full w-full object-cover opacity-[0.40] sm:opacity-[0.52]"
-          />
-        ) : (
-          <div className="h-full w-full bg-[radial-gradient(circle_at_top,_rgba(251,191,36,0.20),_transparent_52%)]" />
-        )}
-        <div className={`absolute inset-0 ${isDark ? 'bg-gradient-to-b from-neutral-950/75 via-neutral-950/90 to-neutral-950' : 'bg-gradient-to-b from-white/75 via-[#F7F8FA]/90 to-[#F7F8FA]'}`} />
-      </div>
+    <div className={`min-h-screen relative overflow-x-hidden transition-colors duration-200 ${isDark ? 'bg-neutral-950' : 'bg-[#F7F8FA]'}`}>
+      {/* <CourseBackground image={course.coverImage} isDark={isDark} /> */}
 
       <div className="relative z-10">
         <div className="hidden lg:block">
@@ -274,27 +281,16 @@ export default function CourseDetail() {
             {/* <StatPill icon={<Clock className="h-3.5 w-3.5" />} label="Self-paced" isDark={isDark} /> */}
             <StatPill icon={<CheckCircle2 className="h-3.5 w-3.5" />} label="Lifetime access" isDark={isDark} />
           </div>
-   <div
-  className= {`font-sans text-2xl font-semibold mt-5 flex items-cente gap-2 mb-4 ${
+   <a href="#checkout"
+  className= {`font-sans text-xl font-semibold mt-5 flex items-cente gap-2 mb-4 ${
     isDark ? 'text-white' : 'text-black'
   }`}
 >
   What's inside <div className="flex justify-center r mt-2">
   <div className="flex flex-col items-center gap-[3px]">
-    <span
-      className={`h-[2px] w-[2px] rounded-full animate-[digitalDot_1.5s_ease-in-out_infinite] ${
-        isDark ? 'bg-amber-400' : 'bg-black'
-      }`}
-    />
 
-    <span
-      className={`h-[3px] w-[3px] rounded-full animate-[digitalDot_1.5s_ease-in-out_0.15s_infinite] ${
-        isDark ? 'bg-amber-400' : 'bg-black'
-      }`}
-    />
-
-    <ChevronDown
-      className={`h-3.5 w-3.5 animate-[digitalArrow_1.5s_ease-in-out_infinite] ${
+    <ArrowDown 
+      className={`h-4 w-4 animate-[digitalArrow_1.5s_ease-in-out_infinite] ${
         isDark
           ? 'text-amber-300 drop-shadow-[0_0_5px_rgba(251,191,36,0.4)]'
           : 'text-black drop-shadow-[0_0_5px_rgba(0,0,0,0.4)]'
@@ -302,7 +298,7 @@ export default function CourseDetail() {
     />
   </div>
 </div>
-</div>
+</a>
           {/* Cover */}
           {course.coverImage && (
             <img
@@ -343,9 +339,9 @@ export default function CourseDetail() {
         <button
           type="button"
           onClick={() => toggleModule(mod.id)}
-          className={`w-full px-5 py-4 text-left transition ${
+          className={`w-full px-5 py-4 text-left dark:bg-neutral-900 transition ${
             isDark
-              ? 'hover:bg-neutral-900'
+              ? 'hover:bg-neutral-500'
               : 'hover:bg-zinc-50'
           }`}
         >
@@ -697,7 +693,7 @@ export default function CourseDetail() {
                               onClick={() =>
                                 goToLesson(lesson)
                               }
-                              className={`mt-2 inline-flex items-center gap-1.5 text-xs font-medium transition ${
+                              className={`mt-3 px-2 inline-flex items-center gap-1.5 text-xs font-medium transition ${
                                 isDark
                                   ? 'text-neutral-400 hover:text-white'
                                   : 'text-zinc-600 hover:text-black'
@@ -757,6 +753,7 @@ export default function CourseDetail() {
           <div id="checkout" className={`mt-14 border-t pt-10 ${isDark ? 'border-neutral-800' : 'border-amber-200'}`}>
             {enrolled ? (
               <button
+              id='curriculum'
                 onClick={() => navigate(`/dashboard/${courseId}`)}
                 className={`w-full rounded-xl py-4 font-semibold transition flex items-center justify-center gap-2
                   ${isDark ? 'bg-amber-500 text-black hover:bg-amber-400' : 'bg-amber-600 text-white hover:bg-amber-700'}`}
@@ -774,7 +771,7 @@ export default function CourseDetail() {
                   Your access is ready. Sign in with{' '}
                   <strong className={isDark ? 'text-white' : 'text-black'}>{form.email}</strong> and your phone number.
                 </p>
-                <button
+                <button 
                   onClick={() => navigate(`/login?redirect=${courseId}`)}
                   className={`inline-flex items-center gap-2 mt-2 rounded-lg px-6 py-2.5 font-semibold transition text-sm
                     ${isDark ? 'bg-amber-500 text-black hover:bg-amber-400' : 'bg-amber-600 text-white hover:bg-amber-700'}`}

@@ -78,10 +78,10 @@ export default function CoursePlayer() {
   const bgClass   = isDarkText ? 'bg-slate-950 text-slate-100' : isDark ? 'bg-neutral-950 text-neutral-100' : 'bg-white text-slate-900'
 
   return (
-    <div className={`min-h-screen ${isDark ? 'bg-neutral-950' : 'bg-white'}`}>
+    <div className={`min-h-screen  ${isDark ? 'bg-neutral-950' : 'bg-white'}`}>
       <main className="min-w-0 overflow-auto pt-14 lg:ml-[288px] lg:pt-0">
         <div className={`min-h-screen transition-colors duration-200 ${bgClass}`}>
-          <div className="max-w-3xl mx-auto px-5 sm:px-8 py-8 lg:py-12">
+          <div className="max-w-5xl mx-auto px-3 sm:px-8 py-8 lg:py-12">
 
             {/* Lesson header */}
             <div className="mb-6">
