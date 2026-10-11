@@ -24,7 +24,11 @@ export function AuthProvider({ children }) {
         profileUnsub = onSnapshot(
           doc(db, 'users', firebaseUser.uid),
           async snap => {
-            if (snap.exists()) {
+            if (snap.exists() && snap.data().removed) {
+              // Admin removed this user from the site: end the session.
+              setProfile(null)
+              firebaseSignOut(auth)
+            } else if (snap.exists()) {
               setProfile({ uid: snap.id, ...snap.data() })
             } else {
               // Profile doc doesn't exist yet — create it.

@@ -16,6 +16,8 @@ import { auth, db } from '../firebase'
 import { useAuth } from '../contexts/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
 import { useToast } from '../contexts/ToastContext'
+import CertificateModal, { hasCertificate } from '../components/CertificateModal'
+import { Award } from 'lucide-react'
 import { listMyEnrollments, getCourse, getProgress, flattenLessons } from '../lib/data'
 import TopNav from '../components/TopNav'
 import AccountPanel from '../components/AccountPanel'
@@ -38,6 +40,7 @@ export default function Dashboard() {
   const [accountOpen, setAccountOpen] = useState(false)
   const [filter,      setFilter]      = useState('all')
   const [query,       setQuery]       = useState('')
+  const [certCourse,  setCertCourse]  = useState(null)
 
   useEffect(() => {
     if (!user) return
@@ -221,6 +224,7 @@ export default function Dashboard() {
                 course={course}
                 percent={percent}
                 completed={completed}
+                onCertificate={setCertCourse}
                 total={total}
               />
             ))}
@@ -240,6 +244,14 @@ export default function Dashboard() {
         theme={theme}
         toggleTheme={toggleTheme}
       />
+      {certCourse && (
+        <CertificateModal
+          open
+          course={certCourse}
+          name={profile?.name || user?.displayName || user?.email?.split('@')[0] || 'Student'}
+          onClose={() => setCertCourse(null)}
+        />
+      )}
     </div>
   )
 }
@@ -287,8 +299,8 @@ function CourseCardSkeleton() {
 }
 // ── Course card ──────────────────────────────────────────────────────────────
 
-function CourseCard({ course, percent, completed, total }) {
-  const isComplete = percent === 100
+function CourseCard({ course, percent, completed, total, onCertificate }) {
+  const isComplete = percent === 100 && total > 0
   const isStarted  = percent > 0
 
   return (
@@ -358,6 +370,16 @@ function CourseCard({ course, percent, completed, total }) {
             </div>
           </div>
         </div>
+
+        {isComplete && hasCertificate(course) && (
+          <button
+            type="button"
+            onClick={e => { e.preventDefault(); e.stopPropagation(); onCertificate(course) }}
+            className="mt-4 w-full inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold py-2.5 transition"
+          >
+            <Award className="h-4 w-4" /> Get your certificate
+          </button>
+        )}
 
         {/* CTA row */}
         <div className="flex items-center justify-between mt-4 pt-4 border-t border-neutral-100 dark:border-neutral-800">

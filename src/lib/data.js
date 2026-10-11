@@ -140,3 +140,62 @@ export async function createPendingOrder({ name, email, courseId, amount, refere
     createdAt: serverTimestamp(),
   })
 }
+// ---------- Admin: users, enrollments, progress ----------
+
+export async function listUsers() {
+  const snap = await getDocs(collection(db, 'users'))
+  return snap.docs.map(d => ({ uid: d.id, ...d.data() })).filter(u => !u.removed)
+}
+
+export async function listAllEnrollments() {
+  const snap = await getDocs(collection(db, 'enrollments'))
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+}
+
+export async function listAllProgress() {
+  const snap = await getDocs(collection(db, 'progress'))
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+}
+
+export async function listPendingEnrollments() {
+  const snap = await getDocs(collection(db, 'pendingEnrollments'))
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+}
+
+export async function revokeEnrollment(uid, courseId) {
+  await deleteDoc(doc(db, 'enrollments', enrollmentId(uid, courseId)))
+}
+
+export async function cancelPendingEnrollment(id) {
+  await deleteDoc(doc(db, 'pendingEnrollments', id))
+}
+
+/** Move a student from one course to another (keeps nothing from the old course). */
+export async function reassignEnrollment({ uid, email, fromCourseId, toCourseId }) {
+  if (fromCourseId === toCourseId) return
+  await grantEnrollment({ uid, courseId: toCourseId, email, source: 'admin-reassign' })
+  if (fromCourseId) await revokeEnrollment(uid, fromCourseId)
+}
+
+export async function resetProgress(uid, courseId) {
+  await deleteDoc(doc(db, 'progress', progressId(uid, courseId)))
+}
+
+/**
+ * Remove a user from the site: deletes their enrollments, progress and pending
+ * grants, and flags the profile as removed so they are signed out and blocked.
+ * (Deleting the Firebase Auth login itself requires the Admin SDK / console.)
+ */
+export async function removeUser(user) {
+  const [enr, prog, pend] = await Promise.all([
+    getDocs(query(collection(db, 'enrollments'), where('uid', '==', user.uid))),
+    getDocs(query(collection(db, 'progress'), where('uid', '==', user.uid))),
+    user.email ? getDocs(query(collection(db, 'pendingEnrollments'), where('email', '==', user.email))) : { docs: [] },
+  ])
+  await Promise.all([...enr.docs, ...prog.docs, ...pend.docs].map(d => deleteDoc(d.ref)))
+  await updateDoc(doc(db, 'users', user.uid), { removed: true, role: 'student', removedAt: serverTimestamp() })
+}
+
+export async function setUserRole(uid, role) {
+  await updateDoc(doc(db, 'users', uid), { role })
+}

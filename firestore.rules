@@ -1,52 +1,46 @@
 rules_version = '2';
+// Rules needed for the admin student-management features and certificates.
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    function isSignedIn() { return request.auth != null; }
+    function signedIn() { return request.auth != null; }
     function isAdmin() {
-      return isSignedIn() &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      return signedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    function notRemoved() {
+      return !exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('removed', false) != true;
     }
 
-    // Published courses: public read. Admin: full access.
-    match /courses/{courseId} {
-      allow read:  if resource.data.published == true || isAdmin();
+    match /courses/{id} {
+      allow read: if resource.data.published == true || isAdmin();
       allow write: if isAdmin();
     }
-
-    // Users can read/update their own profile. Only admins can change roles.
     match /users/{uid} {
-      allow read:   if request.auth.uid == uid || isAdmin();
-      allow create: if request.auth.uid == uid;
-      allow update: if (request.auth.uid == uid &&
-                        request.resource.data.role == resource.data.role) || isAdmin();
+      allow read: if (signedIn() && request.auth.uid == uid) || isAdmin();
+      // Students may create/update their own profile but never change role/removed.
+      allow create: if signedIn() && request.auth.uid == uid && request.resource.data.role == 'student';
+      allow update: if isAdmin() || (signedIn() && request.auth.uid == uid
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'removed']));
+      allow delete: if isAdmin();
     }
-
-    // Enrollments are written by access.js on the client after auth.
-    // Readers can only see their own.
     match /enrollments/{id} {
-      allow read:  if isSignedIn() && resource.data.uid == request.auth.uid || isAdmin();
-      allow write: if isSignedIn();
+      allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+      allow create: if isAdmin() || (signedIn() && request.resource.data.uid == request.auth.uid && notRemoved());
+      allow update, delete: if isAdmin();
     }
-
-    // Pending enrollments (admin grants awaiting first sign-in).
-    // Admins create them. Signed-in users can read/delete their own by email.
-    match /pendingEnrollments/{id} {
-      allow create: if isAdmin();
-      allow read, delete: if isSignedIn() &&
-                             resource.data.email == request.auth.token.email;
-    }
-
-    // Progress is managed by the student only.
     match /progress/{id} {
-      allow read, write: if isSignedIn() && id.matches(request.auth.uid + '_.*');
+      allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+      allow create, update: if signedIn() && request.resource.data.uid == request.auth.uid && notRemoved();
+      allow delete: if isAdmin();
     }
-
-    // Orders: anyone can create (checkout). Only admins can read. Never editable by users.
-    match /orders/{reference} {
+    match /pendingEnrollments/{id} {
+      allow read: if isAdmin() || (signedIn() && resource.data.email == request.auth.token.email);
+      allow create, update: if isAdmin();
+      allow delete: if isAdmin() || (signedIn() && resource.data.email == request.auth.token.email);
+    }
+    match /orders/{id} {
       allow create: if true;
-      allow read:   if isAdmin();
-      allow update, delete: if false;
+      allow read, update, delete: if isAdmin();
     }
   }
 }

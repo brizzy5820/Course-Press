@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom'
 import { getCourse, updateCourse } from '../../lib/data'
 import { useTheme } from '../../contexts/ThemeContext'
 import Preloader from '../../components/Preloader'
+import CertificateDesigner from '../../components/CertificateDesigner'
 
 // ---------------------------------------------------------------------------
 // Cloudinary setup (free — 25 GB storage, no credit card needed)
@@ -66,10 +67,16 @@ export default function CourseEditor() {
 
   async function save() {
     setSaving(true)
-    const { id, ...data } = course
-    await updateCourse(courseId, data)
-    setSaving(false)
-    setSavedAt(new Date())
+    setUploadErr('')
+    try {
+      const { id, ...data } = course
+      await updateCourse(courseId, data)
+      setSavedAt(new Date())
+    } catch (err) {
+      setUploadErr(`Save failed: ${err.message}`)
+    } finally {
+      setSaving(false)
+    }
   }
 
   // ── Cover image ──────────────────────────────────────────────────────────
@@ -362,6 +369,12 @@ export default function CourseEditor() {
             ))}
           </div>
         </section>
+
+        <CertificateDesigner
+          value={course.certificate}
+          onChange={certificate => set({ certificate })}
+          upload={uploadToCloudinary}
+        />
       </main>
 
       <style>{`

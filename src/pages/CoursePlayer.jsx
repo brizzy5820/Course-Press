@@ -13,13 +13,14 @@ import {
 import Sidebar from '../components/Sidebar'
 import VideoPlayer from '../components/VideoPlayer'
 import Preloader from '../components/Preloader'
+import CertificateModal, { hasCertificate } from '../components/CertificateModal'
 
 export default function CoursePlayer() {
   const { courseId } = useParams()
   const [searchParams] = useSearchParams()
   const lessonIdFromUrl = searchParams.get('lesson')
   
-  const { user }     = useAuth()
+  const { user, profile } = useAuth()
   const { theme, toggleTheme } = useTheme()
   const isDark       = theme === 'dark'
 
@@ -29,6 +30,7 @@ export default function CoursePlayer() {
   const [activeLesson, setActiveLesson] = useState(null)
   const [sidebarOpen,  setSidebarOpen]  = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [certOpen, setCertOpen] = useState(false)
 
   const lessons = useMemo(() => course ? flattenLessons(course) : [], [course])
 
@@ -185,6 +187,18 @@ export default function CoursePlayer() {
               </button>
             </div>
 
+            {lessons.length > 0 && lessons.every(l => completedIds.includes(l.id)) && hasCertificate(course) && (
+              <div className="mt-8 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-5 py-4">
+                <div>
+                  <p className="font-semibold text-emerald-700 dark:text-emerald-400">Course complete 🎉</p>
+                  <p className="text-sm text-neutral-600 dark:text-neutral-300">Your certificate is ready to download.</p>
+                </div>
+                <button onClick={() => setCertOpen(true)} className="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2.5 transition">
+                  Get certificate
+                </button>
+              </div>
+            )}
+
             {/* Bottom nav: prev / mark complete / next */}
             <div className={`mt-12 pt-6 border-t flex items-center justify-between gap-3 w-full flex-wrap
               ${isDarkText ? 'border-white/10' : isDark ? 'border-neutral-800' : 'border-slate-100'}`}>
@@ -229,6 +243,14 @@ export default function CoursePlayer() {
           </div>
         </div>
       </main>
+      {certOpen && (
+        <CertificateModal
+          open
+          course={course}
+          name={profile?.name || user?.displayName || user?.email?.split('@')[0] || 'Student'}
+          onClose={() => setCertOpen(false)}
+        />
+      )}
 
       <Sidebar
         course={course}
