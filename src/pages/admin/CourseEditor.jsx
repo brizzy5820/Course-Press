@@ -49,6 +49,36 @@ function youtubePreviewId(input) {
 
 function uid() { return Math.random().toString(36).slice(2, 9) }
 
+// Recognize and render links in text (http(s) and www)
+function linkifyToReact(text, keyPrefix = 'link') {
+  if (!text) return []
+  const str = String(text)
+  const parts = str.split(/(https?:\/\/[^\s<>()"]+|www\.[^\s<>()"]+)/gi)
+  return parts.filter(Boolean).map((part, i) => {
+    const isUrl = /^(https?:\/\/|www\.)/i.test(part)
+    if (!isUrl) return <span key={`${keyPrefix}-${i}`}>{part}</span>
+    const href = part.startsWith('http') ? part : `https://${part}`
+    return (
+      <a
+        key={`${keyPrefix}-${i}`}
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-blue-600 hover:underline break-all"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {part}
+      </a>
+    )
+  })
+}
+
+function LinkifiedText({ text, className = '' }) {
+  if (!text) return null
+  const nodes = linkifyToReact(text, 'lt')
+  return <span className={className}>{nodes}</span>
+}
+
 export default function CourseEditor() {
   const { courseId } = useParams()
   const { theme } = useTheme()
@@ -251,6 +281,13 @@ export default function CourseEditor() {
                   </button>
                 </div>
 
+                {/* Module title link preview */}
+                {mod.title && /^(https?:\/\/|www\.)/i.test(mod.title.trim()) && (
+                  <div className="px-4 py-2 border-b border-slate-100 bg-white">
+                    <LinkifiedText text={mod.title} className="text-xs text-slate-600 break-all" />
+                  </div>
+                )}
+
                 {/* Lessons */}
                 <div className="p-4 space-y-3">
                   {(mod.lessons || []).map((lesson, li) => {
@@ -281,6 +318,13 @@ export default function CourseEditor() {
                           </button>
                         </div>
 
+                        {/* Lesson title link preview */}
+                        {lesson.title && /^(https?:\/\/|www\.)/i.test(lesson.title.trim()) && (
+                          <div className="text-xs text-slate-600 break-all">
+                            <LinkifiedText text={lesson.title} />
+                          </div>
+                        )}
+
                         {/* Video: YouTube URL + thumbnail preview */}
                         {lesson.type === 'video' && (
                           <div className="space-y-2">
@@ -309,13 +353,20 @@ export default function CourseEditor() {
 
                         {/* Text: content textarea */}
                         {lesson.type === 'text' && (
-                          <textarea
-                            rows={5}
-                            placeholder="Lesson text content…"
-                            value={lesson.content}
-                            onChange={e => updateLesson(mod.id, lesson.id, { content: e.target.value })}
-                            className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:border-goldDeep bg-white resize-none"
-                          />
+                          <>
+                            <textarea
+                              rows={5}
+                              placeholder="Lesson text content…"
+                              value={lesson.content}
+                              onChange={e => updateLesson(mod.id, lesson.id, { content: e.target.value })}
+                              className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:border-goldDeep bg-white resize-none"
+                            />
+                            {lesson.content && (
+                              <div className="text-sm text-slate-700 bg-white border border-slate-100 rounded p-2 whitespace-pre-wrap break-words">
+                                <LinkifiedText text={lesson.content} />
+                              </div>
+                            )}
+                          </>
                         )}
 
                         {/* Duration + downloadable attachment */}

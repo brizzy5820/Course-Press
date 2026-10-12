@@ -25,6 +25,36 @@ import VideoPlayer from '../components/VideoPlayer'
 import TopNav from '../components/TopNav'
 import Preloader from '../components/Preloader'
 
+// Render links in plain text
+function linkifyToReact(text, keyPrefix = 'link') {
+  if (!text) return []
+  const str = String(text)
+  const parts = str.split(/(https?:\/\/[^\s<>()"]+|www\.[^\s<>()"]+)/gi)
+  return parts.filter(Boolean).map((part, i) => {
+    const isUrl = /^(https?:\/\/|www\.)/i.test(part)
+    if (!isUrl) return <span key={`${keyPrefix}-${i}`}>{part}</span>
+    const href = part.startsWith('http') ? part : `https://${part}`
+    return (
+      <a
+        key={`${keyPrefix}-${i}`}
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-blue-600 hover:underline break-all"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {part}
+      </a>
+    )
+  })
+}
+
+function LinkifiedText({ text, className = '' }) {
+  if (!text) return null
+  const nodes = linkifyToReact(text, 'lt')
+  return <span className={className}>{nodes}</span>
+}
+
 function truncateHalf(text = '') {
   if (!text) return ''
   const half = Math.ceil(text.length / 2)
@@ -273,8 +303,8 @@ export default function CourseDetail() {
 
           {/* Hero */}
           <p className={`font-mono text-xs uppercase tracking-[0.2em] mb-3 ${isDark ? 'text-neutral-500' : 'text-amber-600'}`}>Course</p>
-          <h1 className={`font-sans text-2xl lg:text-4xl font-semibold leading-tight ${isDark ? 'text-white' : 'text-black'}`}>{course.title}</h1>
-          <p className={`text-lg mt-3 leading-relaxed ${isDark ? 'text-neutral-400' : 'text-zinc-600'}`}>{course.subtitle}</p>
+           <h1 className={`font-sans text-2xl lg:text-4xl font-semibold leading-tight ${isDark ? 'text-white' : 'text-black'}`}><LinkifiedText text={course.title} /></h1>
+           <p className={`text-lg mt-3 leading-relaxed ${isDark ? 'text-neutral-400' : 'text-zinc-600'}`}><LinkifiedText text={course.subtitle} /></p>
 
           {/* Stats */}
           <div className="flex flex-wrap items-center gap-2 mt-6">
@@ -311,9 +341,9 @@ export default function CourseDetail() {
 
           {/* Description */}
           {course.description && (
-            <div className={`prose-reader mt-8 whitespace-pre-line leading-[1.85] text-[1.02rem] ${isDark ? 'text-neutral-300' : 'text-black/80'}`}>
-              {course.description}
-            </div>
+             <div className={`prose-reader mt-8 whitespace-pre-line leading-[1.85] text-[1.02rem] ${isDark ? 'text-neutral-300' : 'text-black/80'}`}>
+               <LinkifiedText text={course.description} />
+             </div>
           )}
 
           {/* Curriculum */}
@@ -408,17 +438,17 @@ export default function CourseDetail() {
               </div>
 
               {/* Module title */}
-              <h3
-                className={`text-sm font-semibold leading-snug ${
-                  isModuleComplete
-                    ? isDark
-                      ? 'text-emerald-400 line-through decoration-2 decoration-emerald-500'
-                      : 'text-emerald-600 line-through decoration-2 decoration-emerald-500'
-                    : isDark ? 'text-white' : 'text-zinc-900'
-                }`}
-              >
-                {mod.title}
-              </h3>
+               <h3
+                 className={`text-sm font-semibold leading-snug ${
+                   isModuleComplete
+                     ? isDark
+                       ? 'text-emerald-400 line-through decoration-2 decoration-emerald-500'
+                       : 'text-emerald-600 line-through decoration-2 decoration-emerald-500'
+                     : isDark ? 'text-white' : 'text-zinc-900'
+                 }`}
+               >
+                 <LinkifiedText text={mod.title} />
+               </h3>
             </div>
           </div>
         </button>
@@ -560,17 +590,17 @@ export default function CourseDetail() {
                           </div>
 
                           {/* Submodule title */}
-                          <h4
-                            className={`mt-1 text-sm font-semibold leading-snug break-words ${
-                              isLessonComplete
-                                ? isDark
-                                  ? 'text-emerald-400 line-through decoration-2 decoration-emerald-500'
-                                  : 'text-emerald-600 line-through decoration-2 decoration-emerald-500'
-                                : isDark ? 'text-neutral-100' : 'text-zinc-900'
-                            }`}
-                          >
-                            {lesson.title}
-                          </h4>
+                           <h4
+                             className={`mt-1 text-sm font-semibold leading-snug break-words ${
+                               isLessonComplete
+                                 ? isDark
+                                   ? 'text-emerald-400 line-through decoration-2 decoration-emerald-500'
+                                   : 'text-emerald-600 line-through decoration-2 decoration-emerald-500'
+                                 : isDark ? 'text-neutral-100' : 'text-zinc-900'
+                             }`}
+                           >
+                             <LinkifiedText text={lesson.title} />
+                           </h4>
 
                           {/* Metadata */}
                           <div
@@ -709,17 +739,15 @@ export default function CourseDetail() {
                         {/* TEXT LESSON */}
                         {isText && lesson.content && (
                           <div className="w-full">
-                            <p
-                              className={`text-xs leading-relaxed ${
-                                isDark
-                                  ? 'text-neutral-400'
-                                  : 'text-zinc-600'
-                              }`}
-                            >
-                              {truncateHalf(
-                                lesson.content
-                              )}
-                            </p>
+                             <p
+                               className={`text-xs leading-relaxed ${
+                                 isDark
+                                   ? 'text-neutral-400'
+                                   : 'text-zinc-600'
+                               }`}
+                             >
+                               <LinkifiedText text={truncateHalf(lesson.content)} />
+                             </p>
 
                             <button
                               type="button"

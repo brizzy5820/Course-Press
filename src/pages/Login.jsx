@@ -287,7 +287,7 @@ export default function Login() {
           {window.history.length > 1 && (
             <button
               onClick={() => window.history.back()}
-              className="absolute top-4 left-4 flex items-center justify-center h-8 w-8 rounded-full bg-amber-50 text-amber-600 hover:bg-amber-100 transition"
+              className="absolute  left-4 flex items-center justify-center h-8 w-8 rounded-full bg-amber-50 text-amber-600 hover:bg-amber-100 transition"
               aria-label="Go back"
             >
               <ArrowLeft className="h-4 w-4" />
@@ -310,7 +310,7 @@ export default function Login() {
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-[2rem] shadow-[0_32px_80px_-16px_rgba(15,23,42,0.18)] ring-1 ring-slate-200 lg:grid lg:grid-cols-2">
+        <div className="overflow-hidden rounded-[2rem] shadow-[0_32px_80px_-16px_rgba(15,23,42,0.18)]  lg:grid lg:grid-cols-2">
 
           {/* Left: trust panel (desktop only) */}
           <TrustPanel />
@@ -319,7 +319,7 @@ export default function Login() {
           <div className="bg-white flex flex-col">
 
             {/* Form header */}
-            <div className="px-7 pt-8 pb-6 sm:px-10 sm:pt-10 border-b border-zinc-100">
+            <div className="px-7 pt-8 pb-6 sm:px-10 sm:pt-10">
               {mode === 'login' ? (
                 <>
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-500 mb-2">
@@ -389,7 +389,7 @@ export default function Login() {
                   <button
                     type="submit"
                     disabled={busy}
-                    className="w-full inline-flex items-center justify-center gap-2 rounded-2xl bg-zinc-900 px-5 py-3.5 text-sm font-semibold text-white transition-all hover:bg-black hover:shadow-lg hover:shadow-zinc-900/20 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+                    className="w-full inline-flex items-center justify-center gap-2 rounded-2xl bg-zinc-900 dark:bg-zinc-800 px-5 py-3.5 text-sm font-semibold text-white transition-all hover:bg-black hover:shadow-lg hover:shadow-zinc-900/20 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {busy ? <><Loader2 className="h-4 w-4 animate-spin" /> Signing in…</> : 'Sign in'}
                   </button>
@@ -426,7 +426,7 @@ export default function Login() {
                   <button
                     type="submit"
                     disabled={busy}
-                    className="w-full inline-flex items-center justify-center gap-2 rounded-2xl bg-zinc-900 px-5 py-3.5 text-sm font-semibold text-white transition-all hover:bg-black hover:shadow-lg hover:shadow-zinc-900/20 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+                    className="w-full inline-flex items-center justify-center gap-2 rounded-2xl bg-zinc-900 dark:bg-zinc-800 px-5 py-3.5 text-sm font-semibold text-white transition-all hover:bg-black hover:shadow-lg hover:shadow-zinc-900/20 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {busy ? <><Loader2 className="h-4 w-4 animate-spin" /> Sending…</> : 'Send reset link'}
                   </button>
@@ -459,7 +459,7 @@ export default function Login() {
             </div>
 
             {/* Form footer */}
-            <div className="px-7 py-5 sm:px-10 border-t border-zinc-100 bg-zinc-50/60">
+            <div className="px-7 py-5 sm:px-10  bg-zinc-50/60  dark:bg-zinc-800">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <p className="text-sm text-zinc-500">
                   Looking for a course?{' '}
@@ -488,10 +488,11 @@ export default function Login() {
       <style>{`
         .field-input {
           width: 100%;
-          border: 1.5px solid #e4e4e7;
+        
           border-radius: 0.75rem;
           padding: 0.75rem 1rem;
-          background: #fafafa;
+          background: #f4f1f1;
+
           color: #18181b;
           font-size: 0.9rem;
           transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
@@ -506,6 +507,7 @@ export default function Login() {
         .field-input:hover:not(:focus) {
           border-color: #d4d4d8;
         }
+
       `}</style>
     </div>
   )
@@ -517,7 +519,7 @@ function Field({ label, hint, children }) {
     <div>
       <div className="flex items-baseline justify-between mb-2">
         <label className="text-sm font-semibold text-zinc-700">{label}</label>
-        {hint && <span className="text-xs text-zinc-400 bg-zinc-100 px-2 py-0.5 rounded-full">{hint}</span>}
+        {hint && <span className="text-xs text-zinc-400 bg-zinc-100  px-2 py-0.5 rounded-full">{hint}</span>}
       </div>
       {children}
     </div>

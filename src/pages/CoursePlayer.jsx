@@ -15,6 +15,36 @@ import VideoPlayer from '../components/VideoPlayer'
 import Preloader from '../components/Preloader'
 import CertificateModal, { hasCertificate } from '../components/CertificateModal'
 
+// Render links in plain text
+function linkifyToReact(text, keyPrefix = 'link') {
+  if (!text) return []
+  const str = String(text)
+  const parts = str.split(/(https?:\/\/[^\s<>()"]+|www\.[^\s<>()"]+)/gi)
+  return parts.filter(Boolean).map((part, i) => {
+    const isUrl = /^(https?:\/\/|www\.)/i.test(part)
+    if (!isUrl) return <span key={`${keyPrefix}-${i}`}>{part}</span>
+    const href = part.startsWith('http') ? part : `https://${part}`
+    return (
+      <a
+        key={`${keyPrefix}-${i}`}
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-blue-600 hover:underline break-all"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {part}
+      </a>
+    )
+  })
+}
+
+function LinkifiedText({ text, className = '' }) {
+  if (!text) return null
+  const nodes = linkifyToReact(text, 'lt')
+  return <span className={className}>{nodes}</span>
+}
+
 export default function CoursePlayer() {
   const { courseId } = useParams()
   const [searchParams] = useSearchParams()
@@ -113,7 +143,7 @@ export default function CoursePlayer() {
                       ? 'text-emerald-400 line-through decoration-2 decoration-emerald-500'
                       : 'text-emerald-600 line-through decoration-2 decoration-emerald-500'
                   : isDarkText ? 'text-white' : isDark ? 'text-white' : 'text-slate-900'}`}>
-                {activeLesson?.title}
+                <LinkifiedText text={activeLesson?.title} />
               </h2>
             </div>
 
@@ -145,7 +175,7 @@ export default function CoursePlayer() {
                     ${isDarkText ? 'text-slate-300' : isDark ? 'text-neutral-300' : 'text-slate-700'}`}
                   style={{ fontFamily: 'Inter, sans-serif' }}
                 >
-                  {activeLesson.content}
+                  <LinkifiedText text={activeLesson.content} />
                 </article>
               )}
 
