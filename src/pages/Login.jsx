@@ -196,7 +196,7 @@ export default function Login() {
         await activatePendingEnrollments(cred.user.uid, em)
         const snap = await getDoc(doc(db, 'users', cred.user.uid))
         const role = snap.data()?.role
-        return navigate(role === 'admin' ? '/admin' : (redirectCourse ? `/dashboard/${redirectCourse}` : '/dashboard'), { replace: true })
+        return navigate(role === 'admin' && !redirectCourse ? '/admin' : (redirectCourse ? `/dashboard/${redirectCourse}` : '/dashboard'), { replace: true })
       } catch (err) {
         if (err.code === 'auth/too-many-requests')
           return fail('Too many attempts. Please wait a few minutes and try again.', ERROR_CODES.tooManyRequests)
@@ -224,7 +224,7 @@ export default function Login() {
         await activatePendingEnrollments(cred.user.uid, em)
         const snap = await getDoc(doc(db, 'users', cred.user.uid))
         const role = snap.data()?.role
-        return navigate(role === 'admin' ? '/admin' : (redirectCourse ? `/dashboard/${redirectCourse}` : '/dashboard'), { replace: true })
+        return navigate(role === 'admin' && !redirectCourse ? '/admin' : (redirectCourse ? `/dashboard/${redirectCourse}` : '/dashboard'), { replace: true })
       } catch (createErr) {
         if (createErr.code === 'auth/email-already-in-use')
           return fail('Incorrect phone number. Use "Forgot password" if you need to reset it.', ERROR_CODES.emailAlreadyInUse)
@@ -260,7 +260,7 @@ export default function Login() {
   function goLogin() { setMode('login'); setError(''); setErrorCode(''); setResetOk(false) }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 sm:p-6 lg:p-8">
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center  py-3 lg:p-8">
 
       {/* Ambient background blobs */}
       <div aria-hidden className="pointer-events-none fixed inset-0 overflow-hidden -z-10">
@@ -326,7 +326,7 @@ export default function Login() {
                     Welcome 
                   </p>
                   <h1 className="text-2xl sm:text-3xl font-bold text-zinc-900 tracking-tight leading-snug">
-                    Sign in to your account
+                    Sign in 
                   </h1>
                   <p className="mt-2 text-sm text-zinc-500 leading-relaxed">
                     Access your courses and pick up right where you left off.
@@ -365,13 +365,13 @@ export default function Login() {
                       onChange={e => setEmail(e.target.value)}
                       placeholder="you@example.com"
                       autoComplete="email"
-                      className="field-input"
+                      className={`bg-gray-100 dark:bg-zinc-800 ${`field-input`}`}
                     />
                   </Field>
 
                   <Field
                     label="Phone number"
-                    hint={`Used as your password. Digits sum must be ${PHONE_DIGIT_SUM_MAX} or less.`}
+                    // hint={`Used as your password.  ${PHONE_DIGIT_SUM_MAX} or less.`}
                   >
                     <input
                       required
@@ -380,7 +380,7 @@ export default function Login() {
                       onChange={e => setPhone(e.target.value)}
                       placeholder="08012345678"
                       autoComplete="tel"
-                      className="field-input"
+                      className={`bg-gray-100 text-black dark:text-white dark:bg-zinc-800 ${`field-input`}`}
                     />
                   </Field>
 
@@ -491,9 +491,9 @@ export default function Login() {
         
           border-radius: 0.75rem;
           padding: 0.75rem 1rem;
-          background: #f4f1f1;
+          // background: #f4f1f1;
 
-          color: #18181b;
+          
           font-size: 0.9rem;
           transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
           outline: none;
@@ -502,6 +502,7 @@ export default function Login() {
         .field-input:focus {
           border-color: #fbbf24;
           background: #ffffff;
+          color: #18181b;
           box-shadow: 0 0 0 3px #fde68a;
         }
         .field-input:hover:not(:focus) {

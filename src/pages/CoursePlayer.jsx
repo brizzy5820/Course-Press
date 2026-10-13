@@ -2,10 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { useParams, Navigate, Link, useSearchParams } from 'react-router-dom'
 import {
   ArrowLeft, CheckCircle2, ChevronLeft, ChevronRight,
-  Download, Moon, Sun, BookOpen, PlayCircle,
+  Download, Moon, Sun, BookOpen, PlayCircle, Loader2,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
+import { useToast } from '../contexts/ToastContext'
 import {
   getCourse, isEnrolled, getProgress,
   markLessonComplete, flattenLessons,
@@ -14,6 +15,7 @@ import Sidebar from '../components/Sidebar'
 import VideoPlayer from '../components/VideoPlayer'
 import Preloader from '../components/Preloader'
 import CertificateModal, { hasCertificate } from '../components/CertificateModal'
+import CertificateLockModal from '../components/CertificateLockModal'
 
 // Render links in plain text
 function linkifyToReact(text, keyPrefix = 'link') {
@@ -52,6 +54,7 @@ export default function CoursePlayer() {
   
   const { user, profile } = useAuth()
   const { theme, toggleTheme } = useTheme()
+  const toast = useToast()
   const isDark       = theme === 'dark'
 
   const [course,       setCourse]       = useState(null)
@@ -61,6 +64,8 @@ export default function CoursePlayer() {
   const [sidebarOpen,  setSidebarOpen]  = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [certOpen, setCertOpen] = useState(false)
+  const [completeBusy, setCompleteBusy] = useState(false)
+  const [certLocked, setCertLocked] = useState(false)
 
   const lessons = useMemo(() => course ? flattenLessons(course) : [], [course])
 
@@ -93,6 +98,32 @@ export default function CoursePlayer() {
     setCompletedIds(ids =>
       done ? [...ids, activeLesson.id] : ids.filter(i => i !== activeLesson.id)
     )
+  }
+
+  // Certificate prompt from the sidebar: only unlocked once every lesson is done.
+  const allComplete = lessons.length > 0 && lessons.every(l => completedIds.includes(l.id))
+  const hasLessons  = lessons.length > 0
+  // A lesson with no video and no text has nothing to actually complete.
+  const activeHasContent = !!(activeLesson?.youtubeId || activeLesson?.content)
+
+  function requestCertificate() {
+    if (allComplete) { setCertOpen(true); return }
+    setCertLocked(true)
+  }
+
+  // "Mark complete" always spins briefly before acting. When the module has no
+  // uploaded course content, it refuses and says so instead of saving progress.
+  function handleCompleteClick() {
+    if (completeBusy) return
+    setCompleteBusy(true)
+    setTimeout(() => {
+      setCompleteBusy(false)
+      if (!hasLessons || !activeHasContent) {
+        toast('No course content yet — this module has nothing to complete.', 'info')
+        return
+      }
+      toggleComplete()
+    }, 700)
   }
 
   const lessonIdx  = lessons.findIndex(l => l.id === activeLesson?.id)
@@ -204,20 +235,26 @@ export default function CoursePlayer() {
                 </div>
               )}
                <button
-                onClick={toggleComplete}
-                className={`inline-flex sm:order-2 mt-4 items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition
-                  ${isDoneLesson
-                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                    : isDark
-                      ? 'bg-amber-500 text-black hover:bg-amber-400'
-                      : 'bg-transparent border border-slate-700 text-black hover:bg-slate-700 hover:text-white'}`}
-              >
-                {isDoneLesson && <CheckCircle2 className="h-4 w-4" />}
-                {isDoneLesson ? 'Completed' : 'Mark complete'}
-              </button>
+                 onClick={handleCompleteClick}
+                 aria-disabled={completeBusy || !hasLessons || !activeHasContent || undefined}
+                 className={`inline-flex sm:order-2 mt-4 items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition
+                   ${completeBusy
+                     ? 'bg-slate-700 text-white cursor-wait'
+                     : !hasLessons || !activeHasContent
+                       ? 'bg-transparent border border-slate-300 text-slate-400 opacity-50 cursor-not-allowed'
+                       : isDoneLesson
+                         ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                         : isDark
+                           ? 'bg-amber-500 text-black hover:bg-amber-400'
+                           : 'bg-transparent border border-slate-700 text-black hover:bg-slate-700 hover:text-white'}`}
+               >
+                 {completeBusy && <Loader2 className="h-4 w-4 animate-spin" />}
+                 {isDoneLesson && !completeBusy && <CheckCircle2 className="h-4 w-4" />}
+                 {completeBusy ? 'Saving…' : isDoneLesson ? 'Completed' : 'Mark complete'}
+               </button>
             </div>
 
-            {lessons.length > 0 && lessons.every(l => completedIds.includes(l.id)) && hasCertificate(course) && (
+            {allComplete && hasCertificate(course) && (
               <div className="mt-8 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-5 py-4">
                 <div>
                   <p className="font-semibold text-emerald-700 dark:text-emerald-400">Course complete 🎉</p>
@@ -237,10 +274,10 @@ export default function CoursePlayer() {
               <button
                 onClick={() => goTo(lessonIdx - 1)}
                 disabled={!hasPrev}
-                className={`inline-flex items-center gap-1.5 px-4 py-2.5 bg-gray-200 rounded-lg text-sm font-medium transition
+                className={`inline-flex items-center gap-1.5 px-4 py-2.5  bg-gray-200 rounded-lg text-sm font-medium transition
                   ${hasPrev
                     ? isDark
-                      ? 'text-neutral-300 hover:bg-white/5 border border-neutral-700'
+                      ? 'text-neutral-300 bg-white/5 hover:bg-white/50 border border-neutral-700'
                       : 'text-slate-600 hover:bg-slate-50 border border-slate-200'
                     : 'opacity-30 cursor-not-allowed border border-transparent text-slate-400'}`}
               >
@@ -282,6 +319,14 @@ export default function CoursePlayer() {
         />
       )}
 
+      {certLocked && (
+        <CertificateLockModal
+          open
+          onClose={() => setCertLocked(false)}
+          message={`Finish every lesson in ${course.title} to unlock your certificate — ${lessons.length - lessons.filter(l => completedIds.includes(l.id)).length} lesson${lessons.length - lessons.filter(l => completedIds.includes(l.id)).length === 1 ? '' : 's'} to go.`}
+        />
+      )}
+
       <Sidebar
         course={course}
         activeLessonId={activeLesson?.id}
@@ -290,6 +335,7 @@ export default function CoursePlayer() {
         open={sidebarOpen}
         onToggle={() => setSidebarOpen(o => !o)}
         onCollapsedChange={setSidebarCollapsed}
+        onCertificate={requestCertificate}
       />
     </div>
   )

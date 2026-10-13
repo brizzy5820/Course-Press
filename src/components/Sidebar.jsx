@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ChevronDown, ChevronRight, PanelLeft, CheckCircle2, PlayCircle, FileText, X, ArrowLeft, Menu, Moon, Sun, BookOpen, LayoutDashboard, Shield } from 'lucide-react'
+import { ChevronDown, ChevronRight, PanelLeft, CheckCircle2, PlayCircle, FileText, X, ArrowLeft, Menu, Moon, Sun, BookOpen, LayoutDashboard, Shield, Award } from 'lucide-react'
 import { useTheme } from '../contexts/ThemeContext'
 import { useAuth } from '../contexts/AuthContext'
+import { hasCertificate } from './CertificateModal'
 /**
  * Design system note (shared across Sidebar / Dashboard / CourseDetail):
  *   - ink:      zinc-950/900        → headings, primary text
@@ -28,6 +29,7 @@ export default function Sidebar({
   onBack = null,
   backPath = null,
   desktopVisible = true,
+  onCertificate = null,
 }) {
 
   const { user, isAdmin } = useAuth()
@@ -273,6 +275,23 @@ export default function Sidebar({
             />
           ))}
         </nav>
+
+        {/* Certificate prompt — bottom of the outline, only when the creator
+            uploaded a certificate template for this course */}
+        {onCertificate && hasCertificate(course) && (
+          <div
+            className={`flex-shrink-0 border-t px-4 py-4 ${collapsed ? "lg:hidden" : ""}
+              ${isDark ? "border-white/[0.06]" : "border-neutral-200"}`}
+          >
+            <button
+              type="button"
+              onClick={onCertificate}
+              className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold py-2.5 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60"
+            >
+              <Award className="h-4 w-4" /> Certificate
+            </button>
+          </div>
+        )}
       </aside>
 
       {/* Mobile backdrop */}

@@ -242,7 +242,7 @@ export default function CourseEditor() {
                 accept="image/*"
                 onChange={handleCoverUpload}
                 disabled={!!uploading}
-                className="text-sm text-slate-500 file:mr-3 file:text-xs file:font-medium file:bg-slate-100 file:border-0 file:rounded file:px-3 file:py-1.5 file:cursor-pointer disabled:opacity-50"
+                className="text-sm text-slate-500 file:mr-3 file:text-xs file:font-medium file:bg-slate-100 dark:file:bg-slate-700 file:border-0 file:rounded file:px-3 file:py-1.5 file:cursor-pointer disabled:opacity-50"
               />
             </Field>
           </div>

@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import {
   Plus, Eye, CheckCircle2, Circle, Trash2, Pencil, Loader2, AlertTriangle, X, LogOut, Check,
   Menu, Sun, Moon, Monitor, LayoutDashboard, BookOpen, Users, UserPlus, Search, ChevronRight,
-  ArrowRightLeft, RotateCcw, UserX, GraduationCap, TrendingUp, Clock, Award,
+  ArrowRightLeft, RotateCcw, UserX, GraduationCap, TrendingUp, Clock, Award, Shield,
 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { useTheme } from '../../contexts/ThemeContext'
@@ -11,7 +11,7 @@ import {
   listCourses, createCourse, deleteCourse, updateCourse, flattenLessons,
   listUsers, listAllEnrollments, listAllProgress, listPendingEnrollments,
   grantEnrollment, revokeEnrollment, reassignEnrollment, resetProgress, removeUser,
-  cancelPendingEnrollment,
+  cancelPendingEnrollment, setUserRole,
 } from '../../lib/data'
 import { grantAccessOnly } from '../../lib/access'
 
@@ -585,11 +585,25 @@ function StudentDrawer({ student, courses, onClose, refresh, showToast, isSelf }
           </section>
         </div>
 
-        <div className="p-5 border-t border-soft">
+        <div className="p-5 border-t border-soft space-y-3">
+          <button
+            onClick={() => run('role', () => setUserRole(student.uid, student.role === 'admin' ? 'student' : 'admin'),
+              student.role === 'admin'
+                ? `${student.name || student.email} is now a student. They keep admin tools only if another admin remains.`
+                : `${student.name || student.email} is now an admin.`)}
+            disabled={isSelf || !!busy}
+            className="btn-secondary w-full justify-center py-2.5"
+          >
+            {busy === 'role' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Shield className="h-4 w-4" />}
+            {student.role === 'admin' ? 'Make student' : 'Make admin'}
+          </button>
+          {isSelf
+            ? <p className="text-xs text-muted text-center">You can't change your own role.</p>
+            : <p className="text-xs text-muted text-center">Admins keep full student access — enrolling, lessons and certificates all still work.</p>}
           <button onClick={() => setConfirm({ kind: 'remove' })} disabled={isSelf || student.role === 'admin'} className="btn-danger w-full justify-center py-2.5 border border-red-200 dark:border-red-500/30">
             <UserX className="h-4 w-4" /> Remove user from site
           </button>
-          {(isSelf || student.role === 'admin') && <p className="text-xs text-muted text-center mt-2">Admin accounts can't be removed here.</p>}
+          {(isSelf || student.role === 'admin') && <p className="text-xs text-muted text-center">Admin accounts can't be removed here.</p>}
         </div>
       </aside>
 

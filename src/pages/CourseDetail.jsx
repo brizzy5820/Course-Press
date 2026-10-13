@@ -9,10 +9,10 @@ import { doc, setDoc, serverTimestamp } from 'firebase/firestore'
 import {
   PlayCircle, FileText, Lock, Clock,
   CheckCircle2, Check, ArrowRight, Loader,
-  ChevronDown, ChevronRight, ExternalLink,
+  ChevronDown, ChevronRight, ExternalLink, Award,
 } from 'lucide-react'
 import { auth, db } from '../firebase'
-import { getCourse, isEnrolled, createPendingOrder, getProgress } from '../lib/data'
+import { getCourse, isEnrolled, createPendingOrder, getProgress, markLessonComplete } from '../lib/data'
 import Sidebar from '../components/Sidebar'
 import {
   accountExists,
@@ -21,6 +21,9 @@ import {
 } from '../lib/access'
 import { useAuth } from '../contexts/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
+import { useToast } from '../contexts/ToastContext'
+import CertificateModal, { hasCertificate } from '../components/CertificateModal'
+import CertificateLockModal from '../components/CertificateLockModal'
 import VideoPlayer from '../components/VideoPlayer'
 import TopNav from '../components/TopNav'
 import Preloader from '../components/Preloader'
@@ -129,6 +132,7 @@ export default function CourseDetail() {
   const { user, profile } = useAuth()
   const { theme }    = useTheme()
   const isDark       = theme === 'dark'
+  const toast        = useToast()
 
   const [course,      setCourse]      = useState(null)
   const [enrolled,    setEnrolled]    = useState(false)
@@ -139,6 +143,8 @@ export default function CourseDetail() {
   const [completedIds, setCompletedIds] = useState([])
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [certOpen, setCertOpen] = useState(false)
+  const [certLocked, setCertLocked] = useState(false)
 
   // accordion state
   const [openModules, setOpenModules] = useState(() => new Set())
@@ -269,6 +275,32 @@ export default function CourseDetail() {
   }
 
   const totalLessons = (course.curriculum || []).reduce((s, m) => s + (m.lessons?.length || 0), 0)
+  const allComplete  = totalLessons > 0
+    && (course.curriculum || []).every(m => (m.lessons || []).every(l => completedIds.includes(l.id)))
+  const lessonIds    = (course.curriculum || []).flatMap(m => (m.lessons || []).map(l => l.id))
+  const doneCount    = lessonIds.filter(id => completedIds.includes(id)).length
+  const remaining    = totalLessons - doneCount
+
+  // Certificate prompt after the outline: enrolled students who finished every
+  // lesson open the certificate; anyone else gets a modal explaining what's missing.
+  function requestCertificate() {
+    if (enrolled && allComplete) { setCertOpen(true); return }
+    setCertLocked(true)
+  }
+
+  // Toggle the check circle for a lesson. Lessons with no uploaded content
+  // (no video/text) can't be completed — tell the student instead.
+  async function toggleLessonComplete(lesson) {
+    const hasContent = !!(lesson.youtubeId || lesson.embedUrl || lesson.videoUrl || lesson.content)
+    if (!hasContent) { toast('No course content yet — this lesson has nothing to complete.', 'info'); return }
+    const done = !completedIds.includes(lesson.id)
+    try {
+      await markLessonComplete(user.uid, courseId, lesson.id, done)
+      setCompletedIds(ids => done ? [...ids, lesson.id] : ids.filter(i => i !== lesson.id))
+    } catch {
+      toast('Could not update your progress. Please try again.', 'error')
+    }
+  }
 
   return (
     <div className={`min-h-screen relative overflow-x-hidden transition-colors duration-200 ${isDark ? 'bg-neutral-950' : 'bg-[#F7F8FA]'}`}>
@@ -630,7 +662,7 @@ export default function CourseDetail() {
                           </div>
                         </button>
 
-                        {/* Completion / lock */}
+                        {/* Completion / lock — a toggle for enrolled students */}
                         <div className="shrink-0 pt-1">
                           {!enrolled ? (
                             <Lock
@@ -640,17 +672,24 @@ export default function CourseDetail() {
                                   : 'text-zinc-400'
                               }`}
                             />
-                          ) : isLessonComplete ? (
-                            <div
-                              className={`flex h-5 w-5 items-center justify-center rounded-full ${
-                                isDark
-                                  ? 'bg-emerald-500 text-neutral-950'
-                                  : 'bg-emerald-600 text-white'
-                              }`}
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => toggleLessonComplete(lesson)}
+                              aria-pressed={isLessonComplete}
+                              aria-label={isLessonComplete ? 'Mark lesson as not complete' : 'Mark lesson as complete'}
+                              className={`flex h-5 w-5 items-center justify-center rounded-full border-2 transition
+                                ${isLessonComplete
+                                  ? isDark
+                                    ? 'bg-emerald-500 border-emerald-500 text-neutral-950'
+                                    : 'bg-emerald-600 border-emerald-600 text-white'
+                                  : isDark
+                                    ? 'border-neutral-600 hover:border-emerald-400'
+                                    : 'border-zinc-300 hover:border-emerald-500'}`}
                             >
-                              <Check className="h-3 w-3" />
-                            </div>
-                          ) : null}
+                              {isLessonComplete && <Check className="h-3 w-3" />}
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -778,6 +817,23 @@ export default function CourseDetail() {
   })}
 </div>
 
+          {/* Certificate prompt — after the outline, only when the creator
+              uploaded a certificate template for this course */}
+          {hasCertificate(course) && (
+            <div className={`mt-10 border-t pt-8 ${isDark ? 'border-neutral-800' : 'border-amber-200'}`}>
+              <button
+                type="button"
+                onClick={requestCertificate}
+                className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold py-3.5 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60"
+              >
+                <Award className="h-4 w-4" /> View certificate
+              </button>
+              <p className={`text-xs text-center mt-2.5 ${isDark ? 'text-neutral-500' : 'text-zinc-500'}`}>
+                Available once you finish every lesson in this course.
+              </p>
+            </div>
+          )}
+
           {/* CTA */}
           <div id="checkout" className={`mt-14 border-t pt-10 ${isDark ? 'border-neutral-800' : 'border-amber-200'}`}>
             {enrolled ? (
@@ -899,7 +955,28 @@ export default function CourseDetail() {
         topLink={{ to: `/dashboard/${courseId}`, label: 'Open course player' }}
         onBack={() => navigate(-1)}
         desktopVisible={false}
+        onCertificate={requestCertificate}
       />
+
+      {certOpen && (
+        <CertificateModal
+          open
+          course={course}
+          name={profile?.name || user?.displayName || user?.email?.split('@')[0] || 'Student'}
+          onClose={() => setCertOpen(false)}
+        />
+      )}
+
+      {certLocked && (
+        <CertificateLockModal
+          open
+          onClose={() => setCertLocked(false)}
+          message={enrolled
+            ? `Finish all ${totalLessons} lessons in ${course.title} to unlock your certificate — ${remaining} lesson${remaining === 1 ? '' : 's'} to go.`
+            : `Enroll in ${course.title} to earn its certificate. Once you finish every lesson you can view and download it here.`}
+          action={enrolled ? { label: 'Continue learning', onClick: () => { setCertLocked(false); navigate(`/dashboard/${courseId}`) } } : null}
+        />
+      )}
     </div>
   )
 }

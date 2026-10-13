@@ -4,6 +4,7 @@ import Home from './pages/Home'
 import CourseDetail from './pages/CourseDetail'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
+import Certificates from './pages/Certificates'
 import CoursePlayer from './pages/CoursePlayer'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import CourseEditor from './pages/admin/CourseEditor'
@@ -50,6 +51,8 @@ export default function App() {
 
         <Route path="/dashboard"
           element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+        <Route path="/dashboard/certificates"
+          element={<ProtectedRoute><Certificates /></ProtectedRoute>} />
         <Route path="/dashboard/:courseId"
           element={<ProtectedRoute><CoursePlayer /></ProtectedRoute>} />
 

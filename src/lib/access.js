@@ -5,23 +5,34 @@ import {
   fetchSignInMethodsForEmail,
 } from 'firebase/auth'
 import {
-  doc, setDoc, getDocs, deleteDoc,
+  doc, setDoc, getDoc, getDocs, deleteDoc,
   collection, query, where, serverTimestamp,
 } from 'firebase/firestore'
 import { auth, db } from '../firebase'
 
 // ---------------------------------------------------------------------------
 // Write a Firestore user profile + course enrollment for a known uid.
-// merge:true on the profile means we never overwrite an existing admin role.
+// NEVER overwrites an existing role: brand-new accounts are created as
+// 'student', while an existing admin keeps 'admin' through every student
+// flow (login, pending-enrollment activation, payment). This is what lets
+// one person be both admin and student without being rolled back.
 // Enrollment doc ID uid_courseId is deterministic so this is idempotent.
 // Pass courseId: null to only write the profile (no enrollment).
 // ---------------------------------------------------------------------------
 export async function writeProfileAndEnrollment({ uid, name, email, courseId, source }) {
-  await setDoc(
-    doc(db, 'users', uid),
-    { name: name || '', email, role: 'student', createdAt: serverTimestamp() },
-    { merge: true }
-  )
+  const ref  = doc(db, 'users', uid)
+  const snap = await getDoc(ref)
+  const exists = snap.exists()
+
+  const profile = {}
+  if (name) profile.name = name          // never blank an existing name
+  if (email) profile.email = email
+  if (!exists) {
+    profile.role      = 'student'        // new account default only
+    profile.createdAt = serverTimestamp()
+  }
+  await setDoc(ref, profile, { merge: true })
+
   if (courseId) {
     await setDoc(doc(db, 'enrollments', `${uid}_${courseId}`), {
       uid, courseId, email, source,

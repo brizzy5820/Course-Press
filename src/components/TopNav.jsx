@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
-  ArrowLeft, BookOpen, LayoutDashboard, LogIn, LogOut, Menu, Moon, Shield,
+  ArrowLeft, Award, BookOpen, LayoutDashboard, LogIn, LogOut, Menu, Moon, Shield,
   Sun, User, X,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
@@ -35,6 +35,7 @@ export default function TopNav({ maxWidth = 'max-w-5xl', showBack = false }) {
   const navItems = [
     { to: '/', label: 'Browse', icon: BookOpen },
     user && { to: '/dashboard', label: 'Library', icon: LayoutDashboard },
+    user && { to: '/dashboard/certificates', label: 'Certificates', icon: Award },
     isAdmin && { to: '/admin', label: 'Admin', icon: Shield },
 
   ].filter(Boolean)

@@ -159,14 +159,24 @@ export default function Dashboard() {
           </div>
 
           {items && items.length > 0 && (
-            <div className="relative w-full sm:w-56">
-              <Search className="h-3.5 w-3.5 text-neutral-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                value={query}
-                onChange={e => setQuery(e.target.value)}
-                placeholder="Search your courses"
-                className="w-full bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-lg pl-9 pr-3 py-2 text-sm text-neutral-800 dark:text-neutral-100 placeholder:text-neutral-400 focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-50 dark:focus:ring-amber-900/20 transition"
-              />
+            <div className="w-full sm:w-56 flex flex-col items-start sm:items-end gap-3">
+              <div className="relative w-full sm:w-56">
+                <Search className="h-3.5 w-3.5 text-neutral-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  value={query}
+                  onChange={e => setQuery(e.target.value)}
+                  placeholder="Search your courses"
+                  className="w-full bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-lg pl-9 pr-3 py-2 text-sm text-neutral-800 dark:text-neutral-100 placeholder:text-neutral-400 focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-50 dark:focus:ring-amber-900/20 transition"
+                />
+              </div>
+              {counts.done > 0 && (
+                <Link
+                  to="/dashboard/certificates"
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300 transition"
+                >
+                  <Award className="h-3.5 w-3.5" /> My certificates
+                </Link>
+              )}
             </div>
           )}
         </div>
