@@ -9,6 +9,7 @@ import {
   collection, query, where, serverTimestamp,
 } from 'firebase/firestore'
 import { auth, db } from '../firebase'
+import { normalizeEmail } from './data'
 
 // ---------------------------------------------------------------------------
 // Write a Firestore user profile + course enrollment for a known uid.
@@ -26,7 +27,7 @@ export async function writeProfileAndEnrollment({ uid, name, email, courseId, so
 
   const profile = {}
   if (name) profile.name = name          // never blank an existing name
-  if (email) profile.email = email
+  if (email) profile.email = normalizeEmail(email)
   if (!exists) {
     profile.role      = 'student'        // new account default only
     profile.createdAt = serverTimestamp()
@@ -49,9 +50,9 @@ export async function writeProfileAndEnrollment({ uid, name, email, courseId, so
 // converts these into real uid-based enrollment docs automatically.
 // ---------------------------------------------------------------------------
 export async function grantAccessOnly({ name, email, courseId }) {
-  await setDoc(doc(db, 'pendingEnrollments', `${email}_${courseId}`), {
+  await setDoc(doc(db, 'pendingEnrollments', `${normalizeEmail(email)}_${courseId}`), {
     name: name || '',
-    email,
+    email: normalizeEmail(email),
     courseId,
     source: 'manual',
     createdAt: serverTimestamp(),
@@ -64,12 +65,13 @@ export async function grantAccessOnly({ name, email, courseId }) {
 // real enrollment doc keyed by uid, then deletes the pending record.
 // ---------------------------------------------------------------------------
 export async function activatePendingEnrollments(uid, email) {
+  const cleanEmail = normalizeEmail(email)
   const snap = await getDocs(
-    query(collection(db, 'pendingEnrollments'), where('email', '==', email))
+    query(collection(db, 'pendingEnrollments'), where('email', '==', cleanEmail))
   )
   for (const d of snap.docs) {
     const { name, courseId, source } = d.data()
-    await writeProfileAndEnrollment({ uid, name, email, courseId, source })
+    await writeProfileAndEnrollment({ uid, name, email: cleanEmail, courseId, source })
     await deleteDoc(d.ref)
   }
 }

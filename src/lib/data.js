@@ -4,6 +4,9 @@ import {
 } from 'firebase/firestore'
 import { db } from '../firebase'
 
+/** Every email is compared/stored lower-case and trimmed so one person = one identity. */
+export const normalizeEmail = (email) => String(email || '').trim().toLowerCase()
+
 // ---------- Courses ----------
 
 export async function listCourses({ onlyPublished = true } = {}) {
@@ -101,7 +104,7 @@ export async function listMyEnrollments(uid) {
 
 export async function grantEnrollment({ uid, courseId, email, source = 'manual' }) {
   await setDoc(doc(db, 'enrollments', enrollmentId(uid, courseId)), {
-    uid, courseId, email, source, grantedAt: serverTimestamp(),
+    uid, courseId, email: normalizeEmail(email), source, grantedAt: serverTimestamp(),
   })
 }
 
@@ -135,7 +138,7 @@ export async function markLessonComplete(uid, courseId, lessonId, complete = tru
 
 export async function createPendingOrder({ name, email, courseId, amount, reference }) {
   await setDoc(doc(db, 'orders', reference), {
-    name, email, courseId, amount, reference,
+    name, email: normalizeEmail(email), courseId, amount, reference,
     status: 'pending',
     createdAt: serverTimestamp(),
   })
@@ -198,4 +201,44 @@ export async function removeUser(user) {
 
 export async function setUserRole(uid, role) {
   await updateDoc(doc(db, 'users', uid), { role })
+}
+
+/**
+ * Merge duplicate profiles that share one email into a single identity.
+ * Every enrollment and progress doc is moved to primaryUid (keeping the
+ * furthest progress), then the duplicate profiles are flagged as removed so
+ * they never show up as a second person again.
+ */
+export async function mergeUserIdentity(primaryUid, duplicateUids = []) {
+  for (const uid of duplicateUids) {
+    if (!uid || uid === primaryUid) continue
+
+    // Move enrollments (idempotent — re-granted under the primary uid).
+    const enr = await getDocs(query(collection(db, 'enrollments'), where('uid', '==', uid)))
+    for (const d of enr.docs) {
+      const { courseId, email, source } = d.data()
+      if (courseId) await grantEnrollment({ uid: primaryUid, courseId, email, source })
+      await deleteDoc(d.ref)
+    }
+
+    // Merge progress — union completed lessons into the primary's doc.
+    const prog = await getDocs(query(collection(db, 'progress'), where('uid', '==', uid)))
+    for (const d of prog.docs) {
+      const { courseId, completedLessonIds } = d.data()
+      if (courseId) {
+        const ref = doc(db, 'progress', progressId(primaryUid, courseId))
+        const snap = await getDoc(ref)
+        const ids  = completedLessonIds || []
+        if (snap.exists()) {
+          if (ids.length) await updateDoc(ref, { completedLessonIds: arrayUnion(...ids), updatedAt: serverTimestamp() })
+        } else {
+          await setDoc(ref, { uid: primaryUid, courseId, completedLessonIds: ids, updatedAt: serverTimestamp() })
+        }
+      }
+      await deleteDoc(d.ref)
+    }
+
+    // Retire the duplicate profile.
+    await updateDoc(doc(db, 'users', uid), { removed: true, role: 'student', removedAt: serverTimestamp() })
+  }
 }

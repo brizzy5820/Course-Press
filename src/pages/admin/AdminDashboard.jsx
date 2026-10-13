@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import {
   Plus, Eye, CheckCircle2, Circle, Trash2, Pencil, Loader2, AlertTriangle, X, LogOut, Check,
   Menu, Sun, Moon, Monitor, LayoutDashboard, BookOpen, Users, UserPlus, Search, ChevronRight,
-  ArrowRightLeft, RotateCcw, UserX, GraduationCap, TrendingUp, Clock, Award, Shield,
+  ArrowRightLeft, RotateCcw, UserX, GraduationCap, TrendingUp, Clock, Award, Shield, GitMerge,
 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { useTheme } from '../../contexts/ThemeContext'
@@ -11,7 +11,7 @@ import {
   listCourses, createCourse, deleteCourse, updateCourse, flattenLessons,
   listUsers, listAllEnrollments, listAllProgress, listPendingEnrollments,
   grantEnrollment, revokeEnrollment, reassignEnrollment, resetProgress, removeUser,
-  cancelPendingEnrollment, setUserRole,
+  cancelPendingEnrollment, setUserRole, mergeUserIdentity, normalizeEmail,
 } from '../../lib/data'
 import { grantAccessOnly } from '../../lib/access'
 
@@ -85,11 +85,49 @@ export default function AdminDashboard() {
       enrollByUser.get(e.uid).push(e)
       enrollByCourse.set(e.courseId, (enrollByCourse.get(e.courseId) || 0) + 1)
     }
-    const students = data.users.map(u => {
-      const enr = (enrollByUser.get(u.uid) || []).filter(e => courseById.has(e.courseId))
-      const courses = enr.map(e => ({ ...e, course: courseById.get(e.courseId), ...pct(u.uid, e.courseId) }))
+    // One identity per email: profiles sharing an email are shown as a single
+    // student, whose enrollments/progress are merged across every uid.
+    const byEmail = new Map()
+    for (const u of data.users) {
+      const key = normalizeEmail(u.email) || `uid:${u.uid}`   // no email → keep separate
+      if (!byEmail.has(key)) byEmail.set(key, [])
+      byEmail.get(key).push(u)
+    }
+    const students = [...byEmail.values()].map(group => {
+      // Primary identity: an admin doc wins, then the one holding the most
+      // enrollments, then the oldest account.
+      const primary = [...group].sort((a, b) => {
+        if ((b.role === 'admin') !== (a.role === 'admin')) return b.role === 'admin' ? 1 : -1
+        const ea = (enrollByUser.get(a.uid) || []).length
+        const eb = (enrollByUser.get(b.uid) || []).length
+        if (eb !== ea) return eb - ea
+        return toMs(a.createdAt) - toMs(b.createdAt)
+      })[0]
+      const uids   = group.map(g => g.uid)
+      const seen   = new Set()
+      const courses = []
+      for (const uid of uids) {
+        for (const e of (enrollByUser.get(uid) || [])) {
+          if (!courseById.has(e.courseId) || seen.has(e.courseId)) continue
+          seen.add(e.courseId)
+          // Progress for this course may live under any uid in the group —
+          // keep the furthest along so merging never loses completed lessons.
+          const stats = uids
+            .map(u => pct(u, e.courseId))
+            .sort((a, b) => b.done - a.done)[0]
+          courses.push({ ...e, course: courseById.get(e.courseId), ...stats })
+        }
+      }
       const avg = courses.length ? Math.round(courses.reduce((s, c) => s + c.percent, 0) / courses.length) : 0
-      return { ...u, courses, avg, completedCount: courses.filter(c => c.percent === 100).length }
+      return {
+        ...primary,
+        uid: primary.uid,
+        name: (group.map(g => g.name).find(Boolean) || '').trim(),
+        email: primary.email,
+        mergedUids: uids.filter(u => u !== primary.uid),
+        courses, avg,
+        completedCount: courses.filter(c => c.percent === 100).length,
+      }
     }).sort((a, b) => toMs(b.createdAt) - toMs(a.createdAt))
     const completions = students.reduce((s, u) => s + u.completedCount, 0)
     const allPct = students.flatMap(s => s.courses.map(c => c.percent))
@@ -442,7 +480,7 @@ function StudentsPanel({ data, model, refresh, showToast, meUid }) {
                   <span className="col-span-12 md:col-span-5 flex items-center gap-3 min-w-0">
                     <Avatar name={u.name} email={u.email} />
                     <span className="min-w-0">
-                      <span className="flex items-center gap-2"><span className="font-medium truncate">{u.name || 'Unnamed'}</span>{u.role === 'admin' && <span className="chip bg-neutral-900 text-white dark:bg-white dark:text-neutral-900">Admin</span>}</span>
+                      <span className="flex items-center gap-2"><span className="font-medium truncate">{u.name || 'Unnamed'}</span>{u.role === 'admin' && <span className="chip bg-neutral-900 text-white dark:bg-white dark:text-neutral-900">Admin</span>}{u.mergedUids?.length > 0 && <span className="chip bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" title={`${u.mergedUids.length + 1} profiles share this email — open to merge`}>{u.mergedUids.length + 1} profiles</span>}</span>
                       <span className="block text-xs text-muted truncate">{u.email}</span>
                     </span>
                   </span>
@@ -534,6 +572,22 @@ function StudentDrawer({ student, courses, onClose, refresh, showToast, isSelf }
               <div key={l} className="rounded-xl bg-neutral-50 dark:bg-neutral-800/60 p-3 text-center"><p className="text-lg font-semibold tabular-nums">{v}</p><p className="text-[11px] text-muted uppercase tracking-wide">{l}</p></div>
             ))}
           </div>
+
+          {student.mergedUids?.length > 0 && (
+            <div className="rounded-xl border border-amber-300/60 bg-amber-500/10 p-4">
+              <h3 className="text-sm font-semibold flex items-center gap-2"><GitMerge className="h-4 w-4 text-amber-600" /> Duplicate accounts detected</h3>
+              <p className="text-xs text-muted mt-1.5 leading-relaxed">
+                {student.email} exists as {student.mergedUids.length + 1} separate profiles. Their courses and progress are already listed together here — merge them into one identity so access is tracked in a single place.
+              </p>
+              <button
+                onClick={() => run('merge', () => mergeUserIdentity(student.uid, student.mergedUids), 'Accounts merged into one identity.')}
+                disabled={!!busy}
+                className="btn-primary w-full justify-center mt-3"
+              >
+                {busy === 'merge' ? <Loader2 className="h-4 w-4 animate-spin" /> : <GitMerge className="h-4 w-4" />} Merge into one account
+              </button>
+            </div>
+          )}
 
           <section>
             <h3 className="text-sm font-semibold mb-3">Assigned courses</h3>

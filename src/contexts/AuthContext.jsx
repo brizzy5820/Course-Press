@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { onAuthStateChanged, signOut as firebaseSignOut } from 'firebase/auth'
 import { doc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore'
 import { auth, db } from '../firebase'
+import NameRequiredModal from '../components/NameRequiredModal'
 
 const AuthContext = createContext(null)
 
@@ -79,9 +80,17 @@ export function AuthProvider({ children }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [user, profile, loading])
 
+  // Every signed-in user needs a name (certificates are printed with it).
+  // First-time sign-ups and older accounts without one are asked right here,
+  // before they can use anything else.
+  const needsName = !loading && !!user && !!profile && !profile.removed && !String(profile.name || '').trim()
+
   return (
     <AuthContext.Provider value={value}>
       {children}
+      {needsName && (
+        <NameRequiredModal user={user} initialName={user.displayName || ''} />
+      )}
     </AuthContext.Provider>
   )
 }

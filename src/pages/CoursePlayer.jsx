@@ -111,19 +111,21 @@ export default function CoursePlayer() {
     setCertLocked(true)
   }
 
-  // "Mark complete" always spins briefly before acting. When the module has no
-  // uploaded course content, it refuses and says so instead of saving progress.
-  function handleCompleteClick() {
+  // "Mark complete" spins until Firestore confirms the write. When the module
+  // has no uploaded course content there's nothing to do — no spinner, just a
+  // straight message.
+  async function handleCompleteClick() {
     if (completeBusy) return
+    if (!hasLessons || !activeHasContent) {
+      toast('No course content yet — this module has nothing to complete.', 'info')
+      return
+    }
     setCompleteBusy(true)
-    setTimeout(() => {
+    try {
+      await toggleComplete()
+    } finally {
       setCompleteBusy(false)
-      if (!hasLessons || !activeHasContent) {
-        toast('No course content yet — this module has nothing to complete.', 'info')
-        return
-      }
-      toggleComplete()
-    }, 700)
+    }
   }
 
   const lessonIdx  = lessons.findIndex(l => l.id === activeLesson?.id)

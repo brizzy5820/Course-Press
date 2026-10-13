@@ -247,8 +247,9 @@ export default function CourseDetail() {
                 await activatePendingEnrollments(uid, effectiveEmail)
                 navigate(`/dashboard/${courseId}`, { replace: true })
               } else {
-                await setDoc(doc(db, 'pendingEnrollments', `${effectiveEmail}_${courseId}`), {
-                  name: effectiveName, email: effectiveEmail, courseId,
+                const cleanEmail = effectiveEmail.trim().toLowerCase()
+                await setDoc(doc(db, 'pendingEnrollments', `${cleanEmail}_${courseId}`), {
+                  name: effectiveName, email: cleanEmail, courseId,
                   source: 'paystack', createdAt: serverTimestamp(),
                 })
                 await setDoc(doc(db, 'orders', reference), { status: 'paid' }, { merge: true })
@@ -474,8 +475,8 @@ export default function CourseDetail() {
                  className={`text-sm font-semibold leading-snug ${
                    isModuleComplete
                      ? isDark
-                       ? 'text-emerald-400 line-through decoration-2 decoration-emerald-500'
-                       : 'text-emerald-600 line-through decoration-2 decoration-emerald-500'
+                       ? 'text-emerald-600 line-through decoration-1 decoration-emerald-500'
+                       : 'text-emerald-600 line-through decoration-1 decoration-emerald-500'
                      : isDark ? 'text-white' : 'text-zinc-900'
                  }`}
                >
@@ -519,7 +520,7 @@ export default function CourseDetail() {
                       className={`px-5 py-3 transition border-b border-gray-200 dark:border-neutral-800 ${
                         expandable
                           ? isDark
-                            ? 'hover:bg-neutral-900'
+                            ? 'hover:bg-black'
                             : 'hover:bg-zinc-50'
                           : ''
                       }`}
