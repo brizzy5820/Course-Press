@@ -5,7 +5,8 @@ export default function AudioPlayer({
   src, 
   title, 
   onEnded,
-  onTimeUpdate 
+  onTimeUpdate,
+  autoPlay = false
 }) {
   const audioRef = useRef(null)
   const [playing, setPlaying] = useState(false)
@@ -20,6 +21,9 @@ export default function AudioPlayer({
   useEffect(() => {
     const audio = audioRef.current
     if (!audio) return
+
+    // Ensure audio doesn't loop - set both property and attribute
+    audio.loop = false
 
     const handleLoadedMetadata = () => {
       setDuration(audio.duration)
@@ -39,6 +43,8 @@ export default function AudioPlayer({
     }
     const handleWaiting = () => setLoading(true)
     const handleCanPlay = () => setLoading(false)
+    const handlePause = () => setPlaying(false)
+    const handlePlay = () => setPlaying(true)
 
     audio.addEventListener('loadedmetadata', handleLoadedMetadata)
     audio.addEventListener('timeupdate', handleTimeUpdate)
@@ -46,6 +52,8 @@ export default function AudioPlayer({
     audio.addEventListener('error', handleError)
     audio.addEventListener('waiting', handleWaiting)
     audio.addEventListener('canplay', handleCanPlay)
+    audio.addEventListener('pause', handlePause)
+    audio.addEventListener('play', handlePlay)
 
     audio.volume = volume
     audio.playbackRate = playbackRate
@@ -57,19 +65,31 @@ export default function AudioPlayer({
       audio.removeEventListener('error', handleError)
       audio.removeEventListener('waiting', handleWaiting)
       audio.removeEventListener('canplay', handleCanPlay)
+      audio.removeEventListener('pause', handlePause)
+      audio.removeEventListener('play', handlePlay)
     }
   }, [volume, playbackRate, onTimeUpdate, onEnded])
 
   const togglePlay = () => {
     const audio = audioRef.current
     if (!audio) return
-    if (playing) {
-      audio.pause()
-    } else {
+    if (audio.paused) {
       audio.play().catch(() => setError('Playback failed'))
+    } else {
+      audio.pause()
     }
-    setPlaying(!playing)
   }
+
+  // Attempt auto-play when autoPlay prop is true (runs on mount and when prop changes)
+  useEffect(() => {
+    const audio = audioRef.current
+    if (audio && autoPlay && audio.paused) {
+      audio.play().catch(() => {
+        // Auto-play blocked by browser - silent fail
+        // User will need to click play manually
+      })
+    }
+  }, [autoPlay])
 
   const handleSeek = (e) => {
     const audio = audioRef.current
@@ -129,12 +149,12 @@ export default function AudioPlayer({
   }
 
   return (
-    <div className="rounded-xl bg-gray-white dark:bg-neutral-900 border-slate-200 dark:border-neutral-700 p-4 space-y-3">
+    <div className="rounded-xl bg-gray-50 dark:bg-neutral-900 border-slate-200 dark:border-neutral-700 p-4 space-y-3">
       {title && (
         <p className="font-medium text-slate-900 dark:text-white truncate">{title}</p>
       )}
 
-      <audio ref={audioRef} src={src} preload="metadata" />
+      <audio ref={audioRef} src={src} preload="metadata" loop={false} />
 
       {/* Progress bar */}
       <div className="relative">
