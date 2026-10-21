@@ -114,7 +114,24 @@ function progressId(uid, courseId) { return `${uid}_${courseId}` }
 
 export async function getProgress(uid, courseId) {
   const snap = await getDoc(doc(db, 'progress', progressId(uid, courseId)))
-  return snap.exists() ? snap.data() : { completedLessonIds: [] }
+  return snap.exists() ? snap.data() : { completedLessonIds: [], watchTime: {} }
+}
+
+/**
+ * Record how many seconds the user has watched for a specific lesson.
+ * Uses a debounced write pattern on the client; this is the server-side
+ * commit. `watchTime` is a map of lessonId -> seconds watched (integer).
+ */
+export async function updateLessonWatchTime(uid, courseId, lessonId, secondsWatched) {
+  const ref = doc(db, 'progress', progressId(uid, courseId))
+  const snap = await getDoc(ref)
+  const existing = snap.exists() ? snap.data() : { completedLessonIds: [], watchTime: {} }
+  const watchTime = { ...(existing.watchTime || {}), [lessonId]: Math.round(secondsWatched) }
+  if (!snap.exists()) {
+    await setDoc(ref, { uid, courseId, completedLessonIds: [], watchTime, updatedAt: serverTimestamp() })
+  } else {
+    await updateDoc(ref, { watchTime, updatedAt: serverTimestamp() })
+  }
 }
 
 export async function markLessonComplete(uid, courseId, lessonId, complete = true) {

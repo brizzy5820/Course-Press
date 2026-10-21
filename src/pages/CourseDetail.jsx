@@ -9,7 +9,7 @@ import { doc, setDoc, serverTimestamp } from 'firebase/firestore'
 import {
   PlayCircle, FileText, Lock, Clock,
   CheckCircle2, Check, ArrowRight, Loader,
-  ChevronDown, ChevronRight, ExternalLink, Award,
+  ChevronDown, ChevronRight, ExternalLink, Award, Music,
 } from 'lucide-react'
 import { auth, db } from '../firebase'
 import { getCourse, isEnrolled, createPendingOrder, getProgress, markLessonComplete } from '../lib/data'
@@ -500,11 +500,12 @@ export default function CourseDetail() {
             <div className="divide-y divide-transparent">
               {lessons.map((lesson, li) => {
                 const isVideo = lesson.type === 'video'
+                const isAudio = lesson.type === 'audio'
                 const isText = lesson.type === 'text'
                 const isLessonComplete = completedIds.includes(lesson.id)
 
                 const expandable =
-                  enrolled && (isVideo || isText)
+                  enrolled && (isVideo || isAudio || isText)
 
                 const lessonOpen =
                   openLessons.has(lesson.id)
@@ -595,6 +596,14 @@ export default function CourseDetail() {
                                     : 'text-zinc-600'
                                 }`}
                               />
+                            ) : isAudio ? (
+                              <Music
+                                className={`h-3.5 w-3.5 ${
+                                  isDark
+                                    ? 'text-neutral-300'
+                                    : 'text-zinc-600'
+                                }`}
+                              />
                             ) : (
                               <FileText
                                 className={`h-3.5 w-3.5 ${
@@ -614,7 +623,9 @@ export default function CourseDetail() {
                             >
                               {isVideo
                                 ? 'Video'
-                                : 'Reading'}
+                                : isAudio
+                                  ? 'Audio'
+                                  : 'Reading'}
                             </span>
 
                             {isLessonComplete && (
@@ -706,7 +717,7 @@ export default function CourseDetail() {
                             : 'bg-white'
                         }`}
                       >
-                        {/* FULL-WIDTH VIDEO / CONTENT */}
+{/* FULL-WIDTH VIDEO / CONTENT */}
                         {isVideo && (
                           <div className="w-full">
                             {lesson.videoUrl ? (
@@ -758,6 +769,20 @@ export default function CourseDetail() {
                                 </p>
                               </div>
                             )}
+                          </div>
+                        )}
+
+{/* Audio lesson */}
+                        {isAudio && lesson.audioUrl && (
+                          <div className="w-full">
+                            <audio
+                              controls
+                              preload="metadata"
+                              src={lesson.audioUrl}
+                              className="w-full"
+                            >
+                              Your browser doesn't support audio playback.
+                            </audio>
 
                             <button
                               type="button"

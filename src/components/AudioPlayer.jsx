@@ -129,7 +129,7 @@ export default function AudioPlayer({
   }
 
   return (
-    <div className="rounded-xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 p-4 space-y-3">
+    <div className="rounded-xl bg-gray-white dark:bg-neutral-900 border-slate-200 dark:border-neutral-700 p-4 space-y-3">
       {title && (
         <p className="font-medium text-slate-900 dark:text-white truncate">{title}</p>
       )}

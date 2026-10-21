@@ -9,7 +9,7 @@ import { useTheme } from '../contexts/ThemeContext'
 import { useToast } from '../contexts/ToastContext'
 import {
   getCourse, isEnrolled, getProgress,
-  markLessonComplete, flattenLessons,
+  markLessonComplete, flattenLessons, updateLessonWatchTime,
 } from '../lib/data'
 import Sidebar from '../components/Sidebar'
 import VideoPlayer from '../components/VideoPlayer'
@@ -61,6 +61,7 @@ export default function CoursePlayer() {
   const [course,       setCourse]       = useState(null)
   const [allowed,      setAllowed]      = useState(null)
   const [completedIds, setCompletedIds] = useState([])
+  const [watchTime,    setWatchTime]    = useState({})
   const [activeLesson, setActiveLesson] = useState(null)
   const [sidebarOpen,  setSidebarOpen]  = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -74,7 +75,10 @@ export default function CoursePlayer() {
     if (!user) return
     isEnrolled(user.uid, courseId).then(setAllowed)
     getCourse(courseId).then(setCourse)
-    getProgress(user.uid, courseId).then(p => setCompletedIds(p.completedLessonIds))
+    getProgress(user.uid, courseId).then(p => {
+      setCompletedIds(p.completedLessonIds)
+      setWatchTime(p.watchTime || {})
+    })
   }, [user, courseId])
 
   useEffect(() => {
@@ -304,46 +308,6 @@ const lessonIdx  = lessons.findIndex(l => l.id === activeLesson?.id)
                 </button>
               </div>
             )}
-
-            {/* Bottom nav: prev / mark complete / next */}
-            <div className={`mt-12 pt-6 border-t flex items-center justify-between gap-3 w-full flex-wrap
-              ${isDarkText ? 'border-white/10' : isDark ? 'border-neutral-800' : 'border-slate-100'}`}>
-
-              {/* Previous */}
-              <button
-                onClick={() => goTo(lessonIdx - 1)}
-                disabled={!hasPrev}
-                className={`inline-flex items-center gap-1.5 px-4 py-2.5  bg-gray-200 rounded-lg text-sm font-medium transition
-                  ${hasPrev
-                    ? isDark
-                      ? 'text-neutral-300 bg-white/5 hover:bg-white/50 border border-neutral-700'
-                      : 'text-slate-600 hover:bg-slate-50 border border-slate-200'
-                    : 'opacity-30 cursor-not-allowed border border-transparent text-slate-400'}`}
-              >
-                <ChevronLeft className="h-4 w-4" />
-                Previous
-              </button>
-
-{/* Mark complete */}
-              <button
-                onClick={handleCompleteClick}
-                aria-disabled={completeBusy || !hasLessons || !activeHasContent || undefined}
-                className={`inline-flex sm:order-2 mt-4 items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition
-                  ${completeBusy
-                    ? 'bg-slate-700 text-white cursor-wait'
-                    : !hasLessons || !activeHasContent
-                      ? 'bg-transparent border border-slate-300 text-slate-400 opacity-50 cursor-not-allowed'
-                      : isDoneLesson
-                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                        : isDark
-                          ? 'bg-amber-500 text-black hover:bg-amber-400'
-                          : 'bg-transparent border border-slate-700 text-black hover:bg-slate-700 hover:text-white'}`}
-              >
-                {completeBusy && <Loader2 className="h-4 w-4 animate-spin" />}
-                {isDoneLesson && !completeBusy && <CheckCircle2 className="h-4 w-4" />}
-                {completeBusy ? 'Saving…' : isDoneLesson ? 'Completed' : 'Mark complete'}
-</button>
-             </div>
 
             {/* Bottom nav: prev / mark complete / next */}
             <div className={`mt-12 pt-6 border-t flex items-center justify-between gap-3 w-full flex-wrap
