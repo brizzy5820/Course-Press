@@ -143,7 +143,7 @@ export default function CourseEditor() {
           ...m,
           lessons: [...(m.lessons || []), {
             id: uid(), title: 'New lesson', type,
-            youtubeId: '', content: '', durationMin: '', resources: [],
+            youtubeId: '', audioUrl: '', content: '', durationMin: '', resources: [],
           }],
         }
       ),
@@ -180,6 +180,20 @@ export default function CourseEditor() {
       })
     } catch (err) {
       setUploadErr(`File upload failed: ${err.message}`)
+    } finally {
+      setUploading('')
+    }
+  }
+
+  // ── Audio upload ───────────────────────────────────────────────────────────
+  async function uploadAudio(modId, lessonId, file) {
+    setUploadErr('')
+    setUploading('audio')
+    try {
+      const url = await uploadToCloudinary(file)
+      updateLesson(modId, lessonId, { audioUrl: url })
+    } catch (err) {
+      setUploadErr(`Audio upload failed: ${err.message}`)
     } finally {
       setUploading('')
     }
@@ -306,10 +320,10 @@ export default function CourseEditor() {
                             className="flex-1 text-sm font-medium text-slate-800 focus:outline-none bg-transparent border-b border-transparent focus:border-slate-300 pb-0.5"
                             placeholder="Lesson title…"
                           />
-                          <span className={`text-[10px] font-mono px-2 py-0.5 rounded font-medium shrink-0
-                            ${lesson.type === 'video' ? 'bg-blue-50 text-blue-600' : 'bg-amber-50 text-amber-700'}`}>
-                            {lesson.type}
-                          </span>
+<span className={`text-[10px] font-mono px-2 py-0.5 rounded font-medium shrink-0
+                             ${lesson.type === 'video' ? 'bg-blue-50 text-blue-600' : lesson.type === 'audio' ? 'bg-purple-50 text-purple-600' : 'bg-amber-50 text-amber-700'}`}>
+                             {lesson.type}
+                           </span>
                           <button
                             onClick={() => removeLesson(mod.id, lesson.id)}
                             className="text-slate-400 hover:text-red-500 transition text-xs shrink-0"
@@ -325,33 +339,64 @@ export default function CourseEditor() {
                           </div>
                         )}
 
-                        {/* Video: YouTube URL + thumbnail preview */}
-                        {lesson.type === 'video' && (
-                          <div className="space-y-2">
-                            <input
-                              placeholder="Paste YouTube URL — e.g. https://www.youtube.com/watch?v=xxxx (set to Unlisted)"
-                              value={lesson.youtubeId}
-                              onChange={e => updateLesson(mod.id, lesson.id, { youtubeId: e.target.value })}
-                              className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:border-goldDeep bg-white"
-                            />
-                            {previewId && (
-                              <div className="flex items-center gap-3 bg-white rounded-lg p-2 border border-slate-100">
-                                <img
-                                  src={`https://img.youtube.com/vi/${previewId}/mqdefault.jpg`}
-                                  alt=""
-                                  className="w-20 h-14 object-cover rounded shrink-0"
-                                  onError={e => { e.target.style.display = 'none' }}
-                                />
-                                <div>
-                                  <p className="text-xs font-medium text-slate-600">✓ Video detected</p>
-                                  <p className="font-mono text-[10px] text-slate-400 mt-0.5">{previewId}</p>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )}
+{/* Video: YouTube URL + thumbnail preview */}
+                         {lesson.type === 'video' && (
+                           <div className="space-y-2">
+                             <input
+                               placeholder="Paste YouTube URL — e.g. https://www.youtube.com/watch?v=xxxx (set to Unlisted)"
+                               value={lesson.youtubeId}
+                               onChange={e => updateLesson(mod.id, lesson.id, { youtubeId: e.target.value })}
+                               className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:border-goldDeep bg-white"
+                             />
+                             {previewId && (
+                               <div className="flex items-center gap-3 bg-white rounded-lg p-2 border border-slate-100">
+                                 <img
+                                   src={`https://img.youtube.com/vi/${previewId}/mqdefault.jpg`}
+                                   alt=""
+                                   className="w-20 h-14 object-cover rounded shrink-0"
+                                   onError={e => { e.target.style.display = 'none' }}
+                                 />
+                                 <div>
+                                   <p className="text-xs font-medium text-slate-600">✓ Video detected</p>
+                                   <p className="font-mono text-[10px] text-slate-400 mt-0.5">{previewId}</p>
+                                 </div>
+                               </div>
+                             )}
+                           </div>
+                         )}
 
-                        {/* Text: content textarea */}
+                         {/* Audio: Upload audio file */}
+                         {lesson.type === 'audio' && (
+                           <div className="space-y-2">
+                             {lesson.audioUrl ? (
+                               <div className="flex items-center gap-3 bg-white rounded-lg p-2 border border-slate-100">
+                                 <div className="w-10 h-10 rounded-lg bg-purple-500/10 flex items-center justify-center shrink-0">
+                                   <svg className="w-5 h-5 text-purple-600" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+                                 </div>
+                                 <div className="flex-1 min-w-0">
+                                   <p className="text-xs font-medium text-slate-600">Audio uploaded</p>
+                                   <p className="font-mono text-[10px] text-slate-400 truncate">{lesson.audioUrl}</p>
+                                 </div>
+                               </div>
+                             ) : (
+                               <p className="text-xs text-slate-500">No audio uploaded yet</p>
+                             )}
+                             <label className={`text-xs font-medium cursor-pointer flex items-center gap-2
+                               ${uploading ? 'text-slate-400 cursor-not-allowed' : 'text-purple-600 hover:underline'}`}>
+                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4"/></svg>
+                               Upload audio (MP3, WAV, etc)
+                               <input
+                                 type="file"
+                                 accept="audio/*"
+                                 className="hidden"
+                                 disabled={!!uploading}
+                                 onChange={e => e.target.files[0] && uploadAudio(mod.id, lesson.id, e.target.files[0])}
+                               />
+                             </label>
+                           </div>
+                         )}
+
+                         {/* Text: content textarea */}
                         {lesson.type === 'text' && (
                           <>
                             <textarea
@@ -410,6 +455,9 @@ export default function CourseEditor() {
                   <div className="flex gap-4 pt-1">
                     <button onClick={() => addLesson(mod.id, 'video')} className="text-xs font-medium text-blue-600 hover:underline">
                       + Video lesson
+                    </button>
+                    <button onClick={() => addLesson(mod.id, 'audio')} className="text-xs font-medium text-purple-600 hover:underline">
+                      + Audio lesson
                     </button>
                     <button onClick={() => addLesson(mod.id, 'text')} className="text-xs font-medium text-amber-600 hover:underline">
                       + Text lesson

@@ -13,6 +13,7 @@ import {
 } from '../lib/data'
 import Sidebar from '../components/Sidebar'
 import VideoPlayer from '../components/VideoPlayer'
+import AudioPlayer from '../components/AudioPlayer'
 import Preloader from '../components/Preloader'
 import CertificateModal, { hasCertificate } from '../components/CertificateModal'
 import CertificateLockModal from '../components/CertificateLockModal'
@@ -103,8 +104,6 @@ export default function CoursePlayer() {
   // Certificate prompt from the sidebar: only unlocked once every lesson is done.
   const allComplete = lessons.length > 0 && lessons.every(l => completedIds.includes(l.id))
   const hasLessons  = lessons.length > 0
-  // A lesson with no video and no text has nothing to actually complete.
-  const activeHasContent = !!(activeLesson?.youtubeId || activeLesson?.content)
 
   function requestCertificate() {
     if (allComplete) { setCertOpen(true); return }
@@ -128,12 +127,30 @@ export default function CoursePlayer() {
     }
   }
 
-  const lessonIdx  = lessons.findIndex(l => l.id === activeLesson?.id)
-  
+  // Watch time tracking for media lessons
+  function handleMediaProgress({ watched, duration, percent, lessonId }) {
+    setWatchTime(prev => ({ ...prev, [activeLesson.id]: watched }))
+  }
+
+  // Called when 50% threshold is reached — auto-mark complete
+  async function handleAutoComplete() {
+    if (!activeLesson || completedIds.includes(activeLesson.id)) return
+    const done = true
+    await markLessonComplete(user.uid, courseId, activeLesson.id, done)
+    setCompletedIds(ids => [...ids, activeLesson.id])
+    toast('Lesson auto-completed — you watched/listened to 50%!', 'success')
+  }
+
+const lessonIdx  = lessons.findIndex(l => l.id === activeLesson?.id)
+   
   const hasPrev    = lessonIdx > 0
   const hasNext    = lessonIdx < lessons.length - 1
   const isDoneLesson = completedIds.includes(activeLesson?.id)
   const isDarkText   = activeLesson?.type === 'text' && isDark
+
+  // For audio/video watch time tracking
+  const isMediaLesson = activeLesson?.type === 'video' || activeLesson?.type === 'audio'
+  const activeHasContent = !!(activeLesson?.youtubeId || activeLesson?.audioUrl || activeLesson?.content)
 
   function goTo(idx) {
     if (idx >= 0 && idx < lessons.length) setActiveLesson(lessons[idx])
@@ -158,9 +175,11 @@ export default function CoursePlayer() {
                 </span>
                 <span className={`text-xs font-medium flex items-center gap-1
                   ${isDarkText ? 'text-slate-500' : isDark ? 'text-neutral-500' : 'text-slate-400'}`}>
-                  {activeLesson?.type === 'video'
-                    ? <><PlayCircle className="h-3 w-3" /> Video</>
-                    : <><BookOpen className="h-3 w-3" /> Reading</>}
+{activeLesson?.type === 'video'
+                      ? <><PlayCircle className="h-3 w-3" /> Video</>
+                      : activeLesson?.type === 'audio'
+                        ? <><svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 12c0 1.657-1.343 3-3 3H6a3 3 0 01-3-3V6a3 3 0 013-3h10a3 3 0 013 3v6z"/></svg> Audio</>
+                        : <><BookOpen className="h-3 w-3" /> Reading</>}
                 </span>
                 {activeLesson?.durationMin && (
                   <span className={`text-xs font-mono ${isDarkText ? 'text-slate-600' : isDark ? 'text-neutral-600' : 'text-slate-400'}`}>
@@ -183,7 +202,25 @@ export default function CoursePlayer() {
             {/* Content */}
             <div  className="mt-10">
               {activeLesson?.type === 'video' ? (
-                <VideoPlayer youtubeId={activeLesson.youtubeId} onEnded={() => {}} />
+                <VideoPlayer
+                  youtubeId={activeLesson.youtubeId}
+                  lessonId={activeLesson.id}
+                  userId={user.uid}
+                  courseId={courseId}
+                  initialWatchTime={watchTime[activeLesson.id] || 0}
+                  videoDurationMin={activeLesson.durationMin || 0}
+                  updateWatchTime={updateLessonWatchTime}
+                  onWatchProgress={handleMediaProgress}
+                  onAutoComplete={handleAutoComplete}
+                  onEnded={() => {}}
+                />
+              ) : activeLesson?.type === 'audio' ? (
+                <AudioPlayer
+                  src={activeLesson.audioUrl}
+                  title={activeLesson.title}
+                  onEnded={() => {}}
+                  onTimeUpdate={(current, dur) => {}}
+                />
               ) : (
                 <div className="flex justify-end mb-5">
                   <button
@@ -287,9 +324,48 @@ export default function CoursePlayer() {
                 Previous
               </button>
 
+{/* Mark complete */}
+              <button
+                onClick={handleCompleteClick}
+                aria-disabled={completeBusy || !hasLessons || !activeHasContent || undefined}
+                className={`inline-flex sm:order-2 mt-4 items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition
+                  ${completeBusy
+                    ? 'bg-slate-700 text-white cursor-wait'
+                    : !hasLessons || !activeHasContent
+                      ? 'bg-transparent border border-slate-300 text-slate-400 opacity-50 cursor-not-allowed'
+                      : isDoneLesson
+                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                        : isDark
+                          ? 'bg-amber-500 text-black hover:bg-amber-400'
+                          : 'bg-transparent border border-slate-700 text-black hover:bg-slate-700 hover:text-white'}`}
+              >
+                {completeBusy && <Loader2 className="h-4 w-4 animate-spin" />}
+                {isDoneLesson && !completeBusy && <CheckCircle2 className="h-4 w-4" />}
+                {completeBusy ? 'Saving…' : isDoneLesson ? 'Completed' : 'Mark complete'}
+</button>
+             </div>
+
+            {/* Bottom nav: prev / mark complete / next */}
+            <div className={`mt-12 pt-6 border-t flex items-center justify-between gap-3 w-full flex-wrap
+              ${isDarkText ? 'border-white/10' : isDark ? 'border-neutral-800' : 'border-slate-100'}`}>
+
+              {/* Previous */}
+              <button
+                onClick={() => goTo(lessonIdx - 1)}
+                disabled={!hasPrev}
+                className={`inline-flex items-center gap-1.5 px-4 py-2.5  bg-gray-200 rounded-lg text-sm font-medium transition
+                  ${hasPrev
+                    ? isDark
+                      ? 'text-neutral-300 bg-white/5 hover:bg-white/50 border border-neutral-700'
+                      : 'text-slate-600 hover:bg-slate-50 border border-slate-200'
+                    : 'opacity-30 cursor-not-allowed border border-transparent text-slate-400'}`}
+              >
+                <ChevronLeft className="h-4 w-4" />
+                Previous
+              </button>
+
               {/* Mark complete */}
              
-
               {/* Next */}
               <button
                 onClick={() => goTo(lessonIdx + 1)}
@@ -312,6 +388,7 @@ export default function CoursePlayer() {
           </div>
         </div>
       </main>
+
       {certOpen && (
         <CertificateModal
           open
