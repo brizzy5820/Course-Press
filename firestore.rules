@@ -42,5 +42,9 @@ service cloud.firestore {
       allow create: if true;
       allow read, update, delete: if isAdmin();
     }
+    // YouTube OAuth tokens — server-only via Admin SDK; blocked from all clients
+    match /youtube_connections/{uid} {
+      allow read, write: if false;
+    }
   }
 }

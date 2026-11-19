@@ -8,6 +8,7 @@ import Certificates from './pages/Certificates'
 import CoursePlayer from './pages/CoursePlayer'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import CourseEditor from './pages/admin/CourseEditor'
+import YouTubeCallback from './pages/admin/YouTubeCallback'
 import { ProtectedRoute, AdminRoute } from './components/Guards'
 import { ToastProvider } from './contexts/ToastContext'
 import Preloader from './components/Preloader'
@@ -60,6 +61,8 @@ export default function App() {
           element={<AdminRoute><AdminDashboard /></AdminRoute>} />
         <Route path="/admin/courses/:courseId"
           element={<AdminRoute><CourseEditor /></AdminRoute>} />
+        <Route path="/admin/youtube-callback"
+          element={<YouTubeCallback />} />
 
         <Route path="*" element={<Home />} />
       </Routes>

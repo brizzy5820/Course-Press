@@ -23,6 +23,13 @@ const db = admin.firestore()
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5174'
 
+// ---------------------------------------------------------------------------
+// Google OAuth2 for YouTube uploads
+// ---------------------------------------------------------------------------
+const GOOGLE_CLIENT_ID     = process.env.GOOGLE_CLIENT_ID
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET
+const GOOGLE_REDIRECT_URI  = process.env.GOOGLE_REDIRECT_URI || `${FRONTEND_URL}/admin/youtube-callback`
+
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
   port: Number(process.env.SMTP_PORT || 587),
@@ -240,4 +247,183 @@ exports.resendAccessLink = onRequest((req, res) => {
       res.status(500).json({ error: 'Server error' })
     }
   })
+})
+
+
+// ===========================================================================
+// YOUTUBE DIRECT UPLOAD — OAuth 2.0 + Token Management
+// ===========================================================================
+//
+// Flow:
+//   1. Admin clicks "Connect YouTube" → youtubeGetAuthUrl returns a Google
+//      OAuth consent URL scoped to youtube.upload
+//   2. Admin grants access → Google redirects to our callback page with a
+//      code in the URL
+//   3. Callback page sends the code → youtubeExchangeCode swaps it for a
+//      refresh_token and stores it securely in Firestore
+//   4. When uploading, frontend calls youtubeGetAccessToken → returns a
+//      short-lived access_token minted from the stored refresh_token
+//   5. Frontend streams the MP4 directly to YouTube's Resumable Upload
+//      endpoint using that access_token (never touches our server)
+//
+// Environment variables required (put in functions/.env):
+//   GOOGLE_CLIENT_ID=xxx.apps.googleusercontent.com
+//   GOOGLE_CLIENT_SECRET=GOCSPX-xxx
+//   GOOGLE_REDIRECT_URI=https://your-site.com/admin/youtube-callback
+// ===========================================================================
+
+// ── Helper: build an OAuth2 client ────────────────────────────────────────
+function makeOAuth2Client() {
+  const { google } = require('googleapis')
+  return new google.auth.OAuth2(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI)
+}
+
+// ── Verify caller is an admin ─────────────────────────────────────────────
+async function requireAdmin(req) {
+  const authHeader = req.headers.authorization || ''
+  const token = authHeader.replace('Bearer ', '')
+  if (!token) throw new Error('Missing auth token')
+  const decoded = await admin.auth().verifyIdToken(token)
+  const callerDoc = await db.collection('users').doc(decoded.uid).get()
+  if (callerDoc.data()?.role !== 'admin') throw new Error('Admins only')
+  return decoded.uid
+}
+
+// ---------------------------------------------------------------------------
+// 1. youtubeGetAuthUrl — returns the Google consent URL
+// ---------------------------------------------------------------------------
+exports.youtubeGetAuthUrl = onRequest({ cors: true }, async (req, res) => {
+  try {
+    await requireAdmin(req)
+    const oauth2 = makeOAuth2Client()
+    const url = oauth2.generateAuthUrl({
+      access_type: 'offline',
+      prompt: 'consent',
+      scope: ['https://www.googleapis.com/auth/youtube.upload'],
+    })
+    res.status(200).json({ url })
+  } catch (err) {
+    console.error('youtubeGetAuthUrl error:', err)
+    res.status(err.message === 'Admins only' ? 403 : 500).json({ error: err.message })
+  }
+})
+
+// ---------------------------------------------------------------------------
+// 2. youtubeExchangeCode — swaps auth code for tokens, stores refresh_token
+// ---------------------------------------------------------------------------
+exports.youtubeExchangeCode = onRequest({ cors: true }, async (req, res) => {
+  try {
+    const uid = await requireAdmin(req)
+    const { code } = req.body
+    if (!code) { res.status(400).json({ error: 'Missing code' }); return }
+
+    const oauth2 = makeOAuth2Client()
+    const { tokens } = await oauth2.getToken(code)
+
+    if (!tokens.refresh_token) {
+      res.status(400).json({ error: 'No refresh token received. Please revoke access at https://myaccount.google.com/permissions and try again.' })
+      return
+    }
+
+    // Fetch the channel info so we can show it in the UI
+    oauth2.setCredentials(tokens)
+    const { google } = require('googleapis')
+    const youtube = google.youtube({ version: 'v3', auth: oauth2 })
+    let channelTitle = 'YouTube Channel'
+    let channelThumbnail = ''
+    try {
+      const channelRes = await youtube.channels.list({ part: 'snippet', mine: true })
+      const ch = channelRes.data.items?.[0]
+      if (ch) {
+        channelTitle = ch.snippet.title
+        channelThumbnail = ch.snippet.thumbnails?.default?.url || ''
+      }
+    } catch (e) {
+      console.warn('Could not fetch channel info:', e.message)
+    }
+
+    // Store securely in Firestore (security rules block client reads)
+    await db.collection('youtube_connections').doc(uid).set({
+      refreshToken: tokens.refresh_token,
+      channelTitle,
+      channelThumbnail,
+      connectedAt: admin.firestore.FieldValue.serverTimestamp(),
+    })
+
+    res.status(200).json({ ok: true, channelTitle, channelThumbnail })
+  } catch (err) {
+    console.error('youtubeExchangeCode error:', err)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ---------------------------------------------------------------------------
+// 3. youtubeGetAccessToken — mints a fresh short-lived access_token
+// ---------------------------------------------------------------------------
+exports.youtubeGetAccessToken = onRequest({ cors: true }, async (req, res) => {
+  try {
+    const uid = await requireAdmin(req)
+    const snap = await db.collection('youtube_connections').doc(uid).get()
+    if (!snap.exists) {
+      res.status(404).json({ error: 'YouTube not connected. Please connect your channel first.' })
+      return
+    }
+
+    const { refreshToken } = snap.data()
+    const oauth2 = makeOAuth2Client()
+    oauth2.setCredentials({ refresh_token: refreshToken })
+    const { token } = await oauth2.getAccessToken()
+
+    if (!token) {
+      res.status(500).json({ error: 'Could not refresh access token. Please reconnect your YouTube channel.' })
+      return
+    }
+
+    res.status(200).json({ accessToken: token })
+  } catch (err) {
+    console.error('youtubeGetAccessToken error:', err)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ---------------------------------------------------------------------------
+// 4. youtubeStatus — returns connection status and channel info
+// ---------------------------------------------------------------------------
+exports.youtubeStatus = onRequest({ cors: true }, async (req, res) => {
+  try {
+    const uid = await requireAdmin(req)
+    const snap = await db.collection('youtube_connections').doc(uid).get()
+    if (!snap.exists) {
+      res.status(200).json({ connected: false })
+      return
+    }
+    const { channelTitle, channelThumbnail } = snap.data()
+    res.status(200).json({ connected: true, channelTitle, channelThumbnail })
+  } catch (err) {
+    console.error('youtubeStatus error:', err)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ---------------------------------------------------------------------------
+// 5. youtubeDisconnect — revokes and removes stored credentials
+// ---------------------------------------------------------------------------
+exports.youtubeDisconnect = onRequest({ cors: true }, async (req, res) => {
+  try {
+    const uid = await requireAdmin(req)
+    const snap = await db.collection('youtube_connections').doc(uid).get()
+    if (snap.exists) {
+      const { refreshToken } = snap.data()
+      // Best-effort revoke with Google
+      try {
+        const oauth2 = makeOAuth2Client()
+        await oauth2.revokeToken(refreshToken)
+      } catch (e) { /* token may already be invalid */ }
+      await db.collection('youtube_connections').doc(uid).delete()
+    }
+    res.status(200).json({ ok: true })
+  } catch (err) {
+    console.error('youtubeDisconnect error:', err)
+    res.status(500).json({ error: err.message })
+  }
 })

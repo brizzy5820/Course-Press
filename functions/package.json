@@ -1,6 +1,8 @@
 {
   "name": "functions",
-  "engines": { "node": "20" },
+  "engines": {
+    "node": "20"
+  },
   "main": "index.js",
   "type": "commonjs",
   "scripts": {
@@ -12,6 +14,7 @@
     "cors": "^2.8.5",
     "firebase-admin": "^12.1.1",
     "firebase-functions": "^5.0.1",
+    "googleapis": "^144.0.0",
     "nodemailer": "^6.9.13"
   }
 }

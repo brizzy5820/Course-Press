@@ -1,7 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { getCourse, updateCourse } from '../../lib/data'
 import { useTheme } from '../../contexts/ThemeContext'
+import {
+  getYouTubeStatus, connectYouTube, disconnectYouTube,
+  getYouTubeAccessToken, uploadToYouTube,
+} from '../../lib/youtube'
 import Preloader from '../../components/Preloader'
 import CertificateDesigner from '../../components/CertificateDesigner'
 
@@ -88,6 +92,29 @@ export default function CourseEditor() {
   const [savedAt,   setSavedAt]   = useState(null)
   const [uploading, setUploading] = useState('')   // '' | 'cover' | 'resource'
   const [uploadErr, setUploadErr] = useState('')
+
+  // ── YouTube connection state ──────────────────────────────────────────────
+  const [ytConnected,  setYtConnected]  = useState(false)
+  const [ytChannel,    setYtChannel]    = useState({ title: '', thumbnail: '' })
+  const [ytConnecting, setYtConnecting] = useState(false)
+  const [ytLoading,    setYtLoading]    = useState(true)
+
+  // Track per-lesson video uploads: { [lessonId]: { percent, status, abort } }
+  const [videoUploads, setVideoUploads] = useState({})
+  const abortControllers = useRef({})
+
+  // ── Load YouTube connection status on mount ───────────────────────────────
+  useEffect(() => {
+    getYouTubeStatus()
+      .then(data => {
+        setYtConnected(data.connected)
+        if (data.connected) {
+          setYtChannel({ title: data.channelTitle, thumbnail: data.channelThumbnail })
+        }
+      })
+      .catch(() => { /* Functions URL not configured yet — that's ok */ })
+      .finally(() => setYtLoading(false))
+  }, [])
 
   useEffect(() => { getCourse(courseId).then(setCourse) }, [courseId])
 
@@ -199,6 +226,100 @@ export default function CourseEditor() {
     }
   }
 
+  // ── YouTube channel connection ────────────────────────────────────────────
+  async function handleConnectYouTube() {
+    setYtConnecting(true)
+    setUploadErr('')
+    try {
+      const { channelTitle, channelThumbnail } = await connectYouTube()
+      setYtConnected(true)
+      setYtChannel({ title: channelTitle, thumbnail: channelThumbnail })
+    } catch (err) {
+      if (!err.message.includes('cancelled')) {
+        setUploadErr(`YouTube connection failed: ${err.message}`)
+      }
+    } finally {
+      setYtConnecting(false)
+    }
+  }
+
+  async function handleDisconnectYouTube() {
+    if (!confirm('Disconnect your YouTube channel? You can reconnect anytime.')) return
+    try {
+      await disconnectYouTube()
+      setYtConnected(false)
+      setYtChannel({ title: '', thumbnail: '' })
+    } catch (err) {
+      setUploadErr(`Failed to disconnect: ${err.message}`)
+    }
+  }
+
+  // ── Direct video upload to YouTube ────────────────────────────────────────
+  async function handleVideoUpload(modId, lessonId, file) {
+    setUploadErr('')
+    const lesson = course.curriculum
+      .find(m => m.id === modId)?.lessons
+      .find(l => l.id === lessonId)
+
+    // Create an abort controller for this upload
+    const controller = new AbortController()
+    abortControllers.current[lessonId] = controller
+
+    setVideoUploads(prev => ({
+      ...prev,
+      [lessonId]: { percent: 0, status: 'uploading', fileName: file.name },
+    }))
+
+    try {
+      // 1. Get a fresh access token
+      const accessToken = await getYouTubeAccessToken()
+
+      // 2. Upload directly to YouTube with progress tracking
+      const videoId = await uploadToYouTube(
+        file,
+        accessToken,
+        { title: lesson?.title || file.name, description: `Course video: ${lesson?.title || ''}` },
+        ({ percent }) => {
+          setVideoUploads(prev => ({
+            ...prev,
+            [lessonId]: { ...prev[lessonId], percent, status: 'uploading' },
+          }))
+        },
+        controller.signal,
+      )
+
+      // 3. Auto-save the YouTube video ID/URL to the lesson
+      updateLesson(modId, lessonId, {
+        youtubeId: `https://www.youtube.com/watch?v=${videoId}`,
+      })
+
+      setVideoUploads(prev => ({
+        ...prev,
+        [lessonId]: { ...prev[lessonId], percent: 100, status: 'done', videoId },
+      }))
+    } catch (err) {
+      if (err.message === 'Upload cancelled') {
+        setVideoUploads(prev => {
+          const next = { ...prev }
+          delete next[lessonId]
+          return next
+        })
+      } else {
+        setUploadErr(`Video upload failed: ${err.message}`)
+        setVideoUploads(prev => ({
+          ...prev,
+          [lessonId]: { ...prev[lessonId], status: 'error', error: err.message },
+        }))
+      }
+    } finally {
+      delete abortControllers.current[lessonId]
+    }
+  }
+
+  function cancelVideoUpload(lessonId) {
+    abortControllers.current[lessonId]?.abort()
+  }
+
   return (
     <div className={`min-h-screen pb-24 ${isDark ? 'bg-neutral-950 text-white' : 'bg-slate-50 text-slate-900'}`}>
 
@@ -211,7 +332,12 @@ export default function CourseEditor() {
           <div className="flex items-center gap-3">
             {uploading && (
               <span className="text-xs text-gold font-medium animate-pulse">
-                {uploading === 'cover' ? 'Uploading cover…' : 'Uploading file…'}
+                {uploading === 'cover' ? 'Uploading cover…' : uploading === 'audio' ? 'Uploading audio…' : 'Uploading file…'}
+              </span>
+            )}
+            {Object.values(videoUploads).some(u => u.status === 'uploading') && (
+              <span className="text-xs text-blue-600 font-medium animate-pulse">
+                Uploading video to YouTube…
               </span>
             )}
             {uploadErr && (
@@ -266,6 +392,68 @@ export default function CourseEditor() {
               <p className="text-[10px] text-slate-400 mt-1 font-mono truncate">{course.coverImage}</p>
             </div>
           )}
+        </section>
+
+        {/* ── YouTube Connection ── */}
+        <section className="bg-white rounded-xl border border-slate-200 p-5">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-3">
+              {/* YouTube icon */}
+              <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${ytConnected ? 'bg-red-500/10' : 'bg-slate-100'}`}>
+                <svg className={`w-5 h-5 ${ytConnected ? 'text-red-600' : 'text-slate-400'}`} viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                </svg>
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-slate-800">
+                  {ytLoading ? 'Checking YouTube…' : ytConnected ? 'YouTube Connected' : 'YouTube Upload'}
+                </p>
+                {ytConnected ? (
+                  <p className="text-xs text-slate-500">
+                    Channel: <span className="font-medium text-slate-700">{ytChannel.title}</span>
+                    <span className="text-slate-400"> · Videos upload as Unlisted · Not made for kids</span>
+                  </p>
+                ) : (
+                  <p className="text-xs text-slate-500">
+                    Connect your YouTube channel to upload videos directly from here
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {ytConnected ? (
+                <button
+                  onClick={handleDisconnectYouTube}
+                  className="text-xs font-medium text-red-500 hover:text-red-700 border border-red-200 rounded-lg px-3 py-1.5 hover:bg-red-50 transition"
+                >
+                  Disconnect
+                </button>
+              ) : (
+                <button
+                  onClick={handleConnectYouTube}
+                  disabled={ytConnecting || ytLoading}
+                  className="text-xs font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg px-4 py-2 transition disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {ytConnecting ? (
+                    <>
+                      <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      Connecting…
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                      </svg>
+                      Connect YouTube Channel
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
         </section>
 
         {/* ── Curriculum ── */}
@@ -339,15 +527,108 @@ export default function CourseEditor() {
                           </div>
                         )}
 
-{/* Video: YouTube URL + thumbnail preview */}
-                         {lesson.type === 'video' && (
-                           <div className="space-y-2">
-                             <input
-                               placeholder="Paste YouTube URL — e.g. https://www.youtube.com/watch?v=xxxx (set to Unlisted)"
-                               value={lesson.youtubeId}
-                               onChange={e => updateLesson(mod.id, lesson.id, { youtubeId: e.target.value })}
-                               className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:border-goldDeep bg-white"
-                             />
+{/* Video: Direct upload OR YouTube URL + thumbnail preview */}
+                         {lesson.type === 'video' && (() => {
+                           const upload = videoUploads[lesson.id]
+                           const isUploading = upload?.status === 'uploading'
+                           const uploadDone  = upload?.status === 'done'
+                           const uploadError = upload?.status === 'error'
+                           return (
+                           <div className="space-y-2.5">
+
+                             {/* Upload progress bar */}
+                             {isUploading && (
+                               <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-2">
+                                 <div className="flex items-center justify-between">
+                                   <div className="flex items-center gap-2">
+                                     <svg className="w-4 h-4 text-blue-600 animate-spin" fill="none" viewBox="0 0 24 24">
+                                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                     </svg>
+                                     <span className="text-xs font-medium text-blue-700">
+                                       Uploading to YouTube… {upload.percent}%
+                                     </span>
+                                   </div>
+                                   <button
+                                     onClick={() => cancelVideoUpload(lesson.id)}
+                                     className="text-xs text-red-500 hover:text-red-700 font-medium"
+                                   >
+                                     Cancel
+                                   </button>
+                                 </div>
+                                 <div className="w-full bg-blue-200 rounded-full h-2 overflow-hidden">
+                                   <div
+                                     className="bg-blue-600 h-2 rounded-full transition-all duration-300 ease-out"
+                                     style={{ width: `${upload.percent}%` }}
+                                   />
+                                 </div>
+                                 <p className="text-[10px] text-blue-500 truncate">{upload.fileName}</p>
+                               </div>
+                             )}
+
+                             {/* Upload success */}
+                             {uploadDone && (
+                               <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-lg p-2.5">
+                                 <svg className="w-4 h-4 text-emerald-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                 </svg>
+                                 <span className="text-xs font-medium text-emerald-700">
+                                   Video uploaded successfully!
+                                 </span>
+                               </div>
+                             )}
+
+                             {/* Upload error */}
+                             {uploadError && (
+                               <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg p-2.5">
+                                 <span className="text-xs font-medium text-red-600">{upload.error}</span>
+                               </div>
+                             )}
+
+                             {/* Direct upload button (shown when YouTube is connected and not uploading) */}
+                             {ytConnected && !isUploading && !previewId && (
+                               <label className="group flex items-center justify-center gap-2 border-2 border-dashed border-blue-300 hover:border-blue-500 rounded-lg px-4 py-4 cursor-pointer bg-blue-50/50 hover:bg-blue-50 transition">
+                                 <svg className="w-5 h-5 text-blue-500 group-hover:text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                 </svg>
+                                 <span className="text-xs font-semibold text-blue-600 group-hover:text-blue-700">
+                                   Upload video directly to YouTube
+                                 </span>
+                                 <input
+                                   type="file"
+                                   accept="video/*"
+                                   className="hidden"
+                                   onChange={e => {
+                                     const file = e.target.files[0]
+                                     if (file) handleVideoUpload(mod.id, lesson.id, file)
+                                     e.target.value = ''
+                                   }}
+                                 />
+                               </label>
+                             )}
+
+                             {/* OR divider (when YouTube is connected) */}
+                             {ytConnected && !isUploading && !previewId && (
+                               <div className="flex items-center gap-3">
+                                 <div className="flex-1 h-px bg-slate-200" />
+                                 <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">or paste URL</span>
+                                 <div className="flex-1 h-px bg-slate-200" />
+                               </div>
+                             )}
+
+                             {/* YouTube URL input (always available) */}
+                             {!isUploading && (
+                               <input
+                                 placeholder={ytConnected
+                                   ? 'Paste YouTube URL (optional if uploading directly)'
+                                   : 'Paste YouTube URL — e.g. https://www.youtube.com/watch?v=xxxx (set to Unlisted)'}
+                                 value={lesson.youtubeId}
+                                 onChange={e => updateLesson(mod.id, lesson.id, { youtubeId: e.target.value })}
+                                 className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:border-goldDeep bg-white"
+                               />
+                             )}
+
+                             {/* Thumbnail preview */}
                              {previewId && (
                                <div className="flex items-center gap-3 bg-white rounded-lg p-2 border border-slate-100">
                                  <img
@@ -360,10 +641,27 @@ export default function CourseEditor() {
                                    <p className="text-xs font-medium text-slate-600">✓ Video detected</p>
                                    <p className="font-mono text-[10px] text-slate-400 mt-0.5">{previewId}</p>
                                  </div>
+                                 {/* Replace button: allow uploading a new video even when one exists */}
+                                 {ytConnected && (
+                                   <label className="ml-auto text-[10px] font-medium text-blue-600 hover:underline cursor-pointer shrink-0">
+                                     Replace
+                                     <input
+                                       type="file"
+                                       accept="video/*"
+                                       className="hidden"
+                                       onChange={e => {
+                                         const file = e.target.files[0]
+                                         if (file) handleVideoUpload(mod.id, lesson.id, file)
+                                         e.target.value = ''
+                                       }}
+                                     />
+                                   </label>
+                                 )}
                                </div>
                              )}
                            </div>
-                         )}
+                           )
+                         })()}
 
                          {/* Audio: Upload audio file */}
                          {lesson.type === 'audio' && (
