@@ -4,6 +4,7 @@ import {
   Plus, Eye, CheckCircle2, Circle, Trash2, Pencil, Loader2, AlertTriangle, X, LogOut, Check,
   Menu, Sun, Moon, Monitor, LayoutDashboard, BookOpen, Users, UserPlus, Search, ChevronRight,
   ArrowRightLeft, RotateCcw, UserX, GraduationCap, TrendingUp, Clock, Award, Shield, GitMerge,
+  UserCheck, FileText, Send, Archive, RefreshCw,
 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { useTheme } from '../../contexts/ThemeContext'
@@ -12,12 +13,17 @@ import {
   listUsers, listAllEnrollments, listAllProgress, listPendingEnrollments,
   grantEnrollment, revokeEnrollment, reassignEnrollment, resetProgress, removeUser,
   cancelPendingEnrollment, setUserRole, mergeUserIdentity, normalizeEmail,
+  createSubAdmin, assignCoursesToSubAdmin, removeCourseFromSubAdmin,
+  listSubAdmins, getManagedCourses, getPendingReviewCourses,
+  reviewCourse, getCoursesByStatus,
 } from '../../lib/data'
 import { grantAccessOnly } from '../../lib/access'
 
 const TABS = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'courses', label: 'Courses', icon: BookOpen },
+  { id: 'review', label: 'Review', icon: FileText },
+  { id: 'subadmins', label: 'Sub-Admins', icon: Users },
   { id: 'students', label: 'Students', icon: Users },
   { id: 'grant', label: 'Grant access', icon: UserPlus },
 ]
@@ -43,11 +49,12 @@ export default function AdminDashboard() {
 
   const refresh = useCallback(async () => {
     try {
-      const [courses, users, enrollments, progress, pending] = await Promise.all([
+      const [courses, users, enrollments, progress, pending, pendingReview] = await Promise.all([
         listCourses({ onlyPublished: false }), listUsers(), listAllEnrollments(), listAllProgress(),
         listPendingEnrollments().catch(() => []),
+        getPendingReviewCourses().catch(() => []),
       ])
-      setData({ courses, users, enrollments, progress, pending })
+      setData({ courses, users, enrollments, progress, pending, pendingReview })
       setLoadErr('')
     } catch (err) {
       console.error(err)
@@ -116,9 +123,336 @@ export default function AdminDashboard() {
             .map(u => pct(u, e.courseId))
             .sort((a, b) => b.done - a.done)[0]
           courses.push({ ...e, course: courseById.get(e.courseId), ...stats })
+}
+}
+
+// ── Review Panel (Main Admin only) ────────────────────────────────────────────
+function ReviewPanel({ data, model, refresh, showToast }) {
+  const [pending, setPending] = useState([])
+  const [busy, setBusy] = useState({})
+  const [feedback, setFeedback] = useState({})
+  const [showFeedback, setShowFeedback] = useState(null)
+
+  useEffect(() => {
+    if (data?.pendingReview) setPending(data.pendingReview)
+  }, [data?.pendingReview])
+
+  const setRow = (id, v) => setBusy(b => { const n = { ...b }; if (v) n[id] = v; else delete n[id]; return n })
+
+  async function handleReview(courseId, approved) {
+    const fb = feedback[courseId]
+    setRow(courseId, 'review')
+    try {
+      await reviewCourse(courseId, { approved, feedback: fb || undefined, reviewedByUid: data.users[0]?.uid })
+      await refresh()
+      showToast('ok', approved ? 'Course approved and published.' : 'Course rejected.')
+      setFeedback(f => { const n = { ...f }; delete n[courseId]; return n })
+      setShowFeedback(null)
+    } catch (err) {
+      console.error(err)
+      showToast('error', 'Could not review the course.')
+    } finally {
+      setRow(courseId)
+    }
+  }
+
+  if (pending.length === 0) {
+    return (
+      <>
+        <PageTitle
+          title="Course Review"
+          subtitle="Courses submitted by sub-admins for approval"
+          action={<button onClick={refresh} className="btn-ghost"><RefreshCw className="h-4 w-4" /> Refresh</button>}
+        />
+        <div className="card p-12 text-center">
+          <FileText className="h-12 w-12 mx-auto text-muted" />
+          <p className="mt-3 font-medium">No courses pending review</p>
+          <p className="text-sm text-muted">Submitted courses will appear here for your approval.</p>
+        </div>
+      </>
+    )
+  }
+
+  return (
+    <>
+      <PageTitle
+        title="Course Review"
+        subtitle={`${pending.length} course${pending.length !== 1 ? 's' : ''} pending your approval`}
+        action={<button onClick={refresh} className="btn-ghost"><RefreshCw className="h-4 w-4" /> Refresh</button>}
+      />
+      <div className="space-y-4">
+        {pending.map(c => (
+          <div key={c.id} className="card p-5">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <h3 className="font-semibold truncate">{c.title}</h3>
+                  <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                    Pending Review
+                  </span>
+                </div>
+                <p className="text-sm text-muted truncate">{c.subtitle || 'No subtitle'}</p>
+                <div className="flex items-center gap-4 mt-2 text-xs text-muted">
+                  <span>By: {data.users.find(u => u.uid === c.createdBy)?.name || 'Unknown'}</span>
+                  <span>Submitted: {c.submittedAt ? new Date(c.submittedAt.toMillis()).toLocaleDateString() : 'Unknown'}</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={() => setShowFeedback(c.id)}
+                  className="btn-ghost"
+                  aria-label="View feedback"
+                >
+                  <FileText className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => handleReview(c.id, false)}
+                  disabled={!!busy[c.id]}
+                  className="btn-danger shrink-0"
+                >
+                  {busy[c.id] === 'review' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />} Reject
+                </button>
+                <button
+                  onClick={() => handleReview(c.id, true)}
+                  disabled={!!busy[c.id]}
+                  className="btn-primary shrink-0"
+                >
+                  {busy[c.id] === 'review' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserCheck className="h-3.5 w-3.5" />} Approve
+                </button>
+              </div>
+            </div>
+
+            {showFeedback === c.id && (
+              <div className="mt-4 p-4 bg-amber-500/10 rounded-xl border border-amber-200/60">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="font-medium">Your feedback (optional)</h4>
+                  <button onClick={() => setShowFeedback(null)} className="icon-btn" aria-label="Close"><X className="h-4 w-4" /></button>
+                </div>
+                <textarea
+                  value={feedback[c.id] || ''}
+                  onChange={e => setFeedback(f => ({ ...f, [c.id]: e.target.value }))}
+                  placeholder="Explain why this course was rejected..."
+                  className="w-full min-h-[80px] admin-input resize-none"
+                  rows={3}
+                />
+                <button
+                  onClick={() => setShowFeedback(null)}
+                  className="btn-secondary mt-2"
+                >
+                  Done
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </>
+  )
+}
+
+// ── Sub-Admins Panel (Main Admin only) ────────────────────────────────────────
+function SubAdminsPanel({ data, model, refresh, showToast, meUid }) {
+  const [subAdmins, setSubAdmins] = useState([])
+  const [creating, setCreating] = useState(false)
+  const [form, setForm] = useState({ email: '', name: '', courseIds: [] })
+  const [busy, setBusy] = useState({})
+  const [editing, setEditing] = useState(null)
+  const [editForm, setEditForm] = useState({})
+
+  useEffect(() => {
+    if (meUid) listSubAdmins(meUid).then(setSubAdmins).catch(() => setSubAdmins([]))
+  }, [meUid, refresh])
+
+  const setRow = (id, v) => setBusy(b => { const n = { ...b }; if (v) n[id] = v; else delete n[id]; return n })
+
+  async function handleCreate(e) {
+    e.preventDefault()
+    setCreating(true)
+    try {
+      await createSubAdmin({ email: form.email, name: form.name, createdByUid: meUid, managedCourseIds: form.courseIds })
+      await refresh()
+      showToast('ok', `Sub-admin created for ${form.email}`)
+      setForm({ email: '', name: '', courseIds: [] })
+    } catch (err) {
+      console.error(err)
+      showToast('error', err.message || 'Could not create sub-admin.')
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  async function handleAssignCourses(subAdminUid) {
+    const courseIds = editForm[subAdminUid] || []
+    setRow(subAdminUid, 'assign')
+    try {
+      // Get current managed courses
+      const subAdmin = subAdmins.find(s => s.uid === subAdminUid)
+      const current = subAdmin?.managedCourses || []
+      
+      // Remove courses that are no longer selected
+      for (const cid of current) {
+        if (!courseIds.includes(cid)) {
+          await removeCourseFromSubAdmin(subAdmin.email, cid, meUid)
         }
       }
-      const avg = courses.length ? Math.round(courses.reduce((s, c) => s + c.percent, 0) / courses.length) : 0
+      // Add new courses
+      for (const cid of courseIds) {
+        if (!current.includes(cid)) {
+          await assignCoursesToSubAdmin(subAdmin.email, [cid], meUid)
+        }
+      }
+      await refresh()
+      showToast('ok', 'Course assignments updated.')
+      setEditing(null)
+    } catch (err) {
+      console.error(err)
+      showToast('error', 'Could not update course assignments.')
+    } finally {
+      setRow(subAdminUid)
+    }
+  }
+
+  if (subAdmins.length === 0 && !creating) {
+    return (
+      <>
+        <PageTitle
+          title="Sub-Admins"
+          subtitle="Manage sub-admin accounts and their course assignments"
+          action={
+            <button onClick={() => setCreating(true)} className="btn-primary">
+              <UserPlus className="h-4 w-4" /> Create Sub-Admin
+            </button>
+          }
+        />
+        <div className="card p-12 text-center">
+          <Users className="h-12 w-12 mx-auto text-muted" />
+          <p className="mt-3 font-medium">No sub-admins yet</p>
+          <p className="text-sm text-muted">Create sub-admins to delegate course management.</p>
+        </div>
+      </>
+    )
+}
+
+  return (
+    <div>
+      <PageTitle
+        title="Sub-Admins"
+        subtitle={`${subAdmins.length} sub-admin${subAdmins.length !== 1 ? 's' : ''} managed by you`}
+        action={
+          creating ? null : (
+            <button onClick={() => setCreating(true)} className="btn-primary">
+              <UserPlus className="h-4 w-4" /> Create Sub-Admin
+            </button>
+          )
+        }
+      />
+      {creating && (
+        <div className="card p-6 max-w-xl">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold">Create Sub-Admin</h3>
+            <button onClick={() => setCreating(false)} className="icon-btn" aria-label="Close"><X className="h-4 w-4" /></button>
+          </div>
+          <form onSubmit={handleCreate} className="space-y-4">
+            <label className="block">
+              <span className="block text-xs font-medium uppercase tracking-wide text-muted mb-1.5">Email</span>
+              <input required type="email" placeholder="subadmin@example.com" className="admin-input" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
+            </label>
+            <label className="block">
+              <span className="block text-xs font-medium uppercase tracking-wide text-muted mb-1.5">Name</span>
+              <input required type="text" placeholder="John Doe" className="admin-input" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+            </label>
+            <label className="block">
+              <span className="block text-xs font-medium uppercase tracking-wide text-muted mb-1.5">Initial Courses (optional)</span>
+              <select multiple className="admin-input min-h-[120px]" value={form.courseIds} onChange={e => {
+                const selected = Array.from(e.target.selectedOptions).map(o => o.value)
+                setForm(f => ({ ...f, courseIds: selected }))
+              }}>
+                {data.courses?.map(c => (
+                  <option key={c.id} value={c.id}>{c.title}</option>
+                ))}
+              </select>
+            </label>
+            <div className="flex gap-2 pt-2">
+              <button type="submit" disabled={creating} className="btn-primary flex-1 justify-center">
+                {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Create Sub-Admin'}
+              </button>
+              <button type="button" onClick={() => setCreating(false)} className="btn-secondary flex-1 justify-center">Cancel</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      <div className="space-y-4">
+        {subAdmins.map(s => {
+          const managedCourses = s.managedCourses || []
+          const courseTitles = managedCourses.map(id => model.courseById.get(id)?.title).filter(Boolean)
+          const isEditing = editing === s.uid
+          
+          return (
+            <div key={s.uid} className="card p-5">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <h3 className="font-semibold truncate">{s.name || 'Unnamed'}</h3>
+                    <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400">
+                      Sub-Admin
+                    </span>
+                  </div>
+                  <p className="text-sm text-muted truncate">{s.email}</p>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {courseTitles.length > 0 ? (
+                      courseTitles.map((title, i) => (
+                        <span key={i} className="text-xs px-2 py-0.5 rounded bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400">
+                          {title}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-xs text-muted">No courses assigned</span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {!isEditing ? (
+                    <button
+                      onClick={() => {
+                        setEditing(s.uid)
+                        setEditForm(f => ({ ...f, [s.uid]: s.managedCourses || [] }))
+                      }}
+                      className="btn-ghost"
+                    >
+                      <Send className="h-4 w-4" /> Assign Courses
+                    </button>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <select multiple className="admin-input min-h-[80px] w-64" value={editForm[s.uid] || []} onChange={e => {
+                        const selected = Array.from(e.target.selectedOptions).map(o => o.value)
+                        setEditForm(f => ({ ...f, [s.uid]: selected }))
+                      }}>
+                        {data.courses?.map(c => (
+                          <option key={c.id} value={c.id}>{c.title}</option>
+                        ))}
+                      </select>
+                      <button onClick={() => handleAssignCourses(s.uid)} disabled={!!busy[s.uid]} className="btn-primary">
+                        {busy[s.uid] === 'assign' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Save'}
+                      </button>
+                      <button onClick={() => { setEditing(null); setEditForm(f => { const n = { ...f }; delete n[s.uid]; return n }) }} className="btn-ghost">
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {isEditing && (
+                <div className="mt-4 p-4 bg-purple-500/10 rounded-xl border border-purple-200/60">
+                  <p className="text-xs text-muted mb-2">Select courses to assign to this sub-admin. Hold Ctrl/Cmd to select multiple.</p>
+</div>
+         )}
+       </div>
+     </div>
+    )
+  }
+const avg = courses.length ? Math.round(courses.reduce((s, c) => s + c.percent, 0) / courses.length) : 0
       return {
         ...primary,
         uid: primary.uid,
@@ -219,6 +553,8 @@ export default function AdminDashboard() {
 
           {tab === 'overview' && <Overview model={model} data={data} go={go} />}
           {tab === 'courses' && <CoursesPanel data={data} model={model} refresh={refresh} showToast={showToast} navigate={navigate} />}
+          {tab === 'review' && <ReviewPanel data={data} model={model} refresh={refresh} showToast={showToast} />}
+          {tab === 'subadmins' && <SubAdminsPanel data={data} model={model} refresh={refresh} showToast={showToast} meUid={me?.uid} />}
           {tab === 'students' && <StudentsPanel data={data} model={model} refresh={refresh} showToast={showToast} meUid={me?.uid} />}
           {tab === 'grant' && <ManualAccessPanel courses={data?.courses} showToast={showToast} onDone={refresh} />}
         </div>
