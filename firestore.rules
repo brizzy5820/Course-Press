@@ -1,75 +1,43 @@
 rules_version = '2';
+// Rules needed for the admin student-management features and certificates.
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
-    function getUserData() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-    }
     function isAdmin() {
-      return signedIn() && getUserData().role == 'admin';
-    }
-    function isMainAdmin() {
-      return isAdmin() && getUserData().adminLevel != 'sub';
-    }
-    function isSubAdmin() {
-      return isAdmin() && getUserData().adminLevel == 'sub';
+      return signedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
     function notRemoved() {
       return !exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        || getUserData().get('removed', false) != true;
+        || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('removed', false) != true;
     }
 
     match /courses/{id} {
-      // Published courses readable by anyone
-      // Draft/pending_review readable by creator and admins
-      allow read: if resource.data.published == true 
-        || (isAdmin() && (resource.data.createdBy == request.auth.uid || isMainAdmin()))
-        || (isSubAdmin() && resource.data.createdBy == request.auth.uid);
-      
-      allow create: if isAdmin();
-      
-      // Update permissions:
-      // - Main admin: can update any course
-      // - Sub-admin: can only update their own created courses (not published ones)
-      allow update: if isMainAdmin()
-        || (isSubAdmin() && resource.data.createdBy == request.auth.uid && resource.data.published != true);
-      
-      allow delete: if isMainAdmin();
+      allow read: if resource.data.published == true || isAdmin();
+      allow write: if isAdmin();
     }
-    
     match /users/{uid} {
       allow read: if (signedIn() && request.auth.uid == uid) || isAdmin();
-      
       // Students may create/update their own profile but never change role/removed.
       allow create: if signedIn() && request.auth.uid == uid && request.resource.data.role == 'student';
-      
-      // Main admin: full control
-      // Sub-admin: cannot change roles, adminLevel, createdBy, managedCourses
-      allow update: if isMainAdmin() 
-        || (signedIn() && request.auth.uid == uid
-          && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'removed', 'adminLevel', 'createdBy', 'managedCourses']));
-      
-      allow delete: if isMainAdmin();
+      allow update: if isAdmin() || (signedIn() && request.auth.uid == uid
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'removed']));
+      allow delete: if isAdmin();
     }
-    
     match /enrollments/{id} {
       allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
       allow create: if isAdmin() || (signedIn() && request.resource.data.uid == request.auth.uid && notRemoved());
       allow update, delete: if isAdmin();
     }
-    
     match /progress/{id} {
       allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
       allow create, update: if signedIn() && request.resource.data.uid == request.auth.uid && notRemoved();
       allow delete: if isAdmin();
     }
-    
     match /pendingEnrollments/{id} {
       allow read: if isAdmin() || (signedIn() && resource.data.email == request.auth.token.email);
       allow create, update: if isAdmin();
       allow delete: if isAdmin() || (signedIn() && resource.data.email == request.auth.token.email);
     }
-    
     match /orders/{id} {
       allow create: if true;
       allow read, update, delete: if isAdmin();

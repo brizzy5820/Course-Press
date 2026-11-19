@@ -1,14 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { getCourse, updateCourse, createCourseForReview, updateCourseWithAuth, isMainAdmin, submitCourseForReview } from '../../lib/data'
+import { getCourse, updateCourse } from '../../lib/data'
 import { useTheme } from '../../contexts/ThemeContext'
-import { useAuth } from '../../contexts/AuthContext'
-import { useToast } from '../../contexts/ToastContext'
 import Preloader from '../../components/Preloader'
 import CertificateDesigner from '../../components/CertificateDesigner'
-import { AlertCircle, Clock, Send, CheckCircle2 } from 'lucide-react'
-
-// Simple label wrapper
 
 // ---------------------------------------------------------------------------
 // Cloudinary setup (free — 25 GB storage, no credit card needed)
@@ -87,8 +82,6 @@ function LinkifiedText({ text, className = '' }) {
 export default function CourseEditor() {
   const { courseId } = useParams()
   const { theme } = useTheme()
-  const { user: me } = useAuth()
-  const showToast = useToast()
   const isDark = theme === 'dark'
   const [course,    setCourse]    = useState(null)
   const [saving,    setSaving]    = useState(false)
@@ -100,39 +93,17 @@ export default function CourseEditor() {
 
   if (!course) return <Preloader label="Loading editor" />
 
-  // Check if current user is main admin or sub-admin
-  const isMain = me && isMainAdmin(me.email)
-  const isSubAdmin = me && !isMain && me.role === 'admin'
-  const canPublish = isMain
-
   function set(patch) { setCourse(c => ({ ...c, ...patch })) }
 
   async function save() {
-    if (!me) return
     setSaving(true)
     setUploadErr('')
     try {
       const { id, ...data } = course
-      await updateCourseWithAuth(courseId, data, me.uid)
+      await updateCourse(courseId, data)
       setSavedAt(new Date())
     } catch (err) {
       setUploadErr(`Save failed: ${err.message}`)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  // Sub-admin: submit course for review
-  async function submitForReview() {
-    if (!me || !isSubAdmin) return
-    setSaving(true)
-    setUploadErr('')
-    try {
-      await submitCourseForReview(courseId, me.uid)
-      setSavedAt(new Date())
-      showToast?.('ok', 'Course submitted for review.')
-    } catch (err) {
-      setUploadErr(`Submit failed: ${err.message}`)
     } finally {
       setSaving(false)
     }
@@ -228,7 +199,7 @@ export default function CourseEditor() {
     }
   }
 
-return (
+  return (
     <div className={`min-h-screen pb-24 ${isDark ? 'bg-neutral-950 text-white' : 'bg-slate-50 text-slate-900'}`}>
 
       {/* Sticky save bar */}
@@ -246,48 +217,9 @@ return (
             {uploadErr && (
               <span className="text-xs text-red-600 max-w-xs truncate">{uploadErr}</span>
             )}
-            
-            {/* Course status indicator for sub-admins */}
-            {isSubAdmin && course.status && (
-              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
-                course.status === 'pending_review' ? 'bg-amber-500/10 text-amber-700 dark:bg-amber-500/20 text-amber-400' :
-                course.status === 'rejected' ? 'bg-red-500/10 text-red-700 dark:bg-red-500/20 text-red-400' :
-                course.status === 'published' ? 'bg-emerald-500/10 text-emerald-700 dark:bg-emerald-500/20 text-emerald-400' :
-                'bg-slate-500/10 text-slate-700 dark:bg-slate-500/20 text-slate-400'
-              }`}>
-                {course.status === 'pending_review' && <Clock className="h-3 w-3" />}
-                {course.status === 'rejected' && <AlertCircle className="h-3 w-3" />}
-                {course.status === 'published' && <CheckCircle2 className="h-3 w-3" />}
-                {course.status === 'pending_review' ? 'Pending Review' :
-                 course.status === 'rejected' ? 'Rejected' :
-                 course.status === 'published' ? 'Published' : 'Draft'}
-              </span>
-            )}
-
-            {uploading && (
-              <span className="text-xs text-gold font-medium animate-pulse">
-                {uploading === 'cover' ? 'Uploading cover…' : 'Uploading file…'}
-              </span>
-            )}
-            {uploadErr && (
-              <span className="text-xs text-red-600 max-w-xs truncate">{uploadErr}</span>
-            )}
             {savedAt && !saving && !uploading && (
               <span className="text-xs text-slate-400">Saved {savedAt.toLocaleTimeString()}</span>
             )}
-            
-            {/* Sub-admin actions */}
-            {isSubAdmin && course.status !== 'published' && (
-              <button
-                onClick={submitForReview}
-                disabled={saving || !!uploading || course.status === 'pending_review'}
-                className="bg-amber-500 text-black rounded-lg px-4 py-2 text-sm font-medium hover:bg-amber-400 transition disabled:opacity-50"
-              >
-                {saving ? 'Submitting…' : 'Submit for Review'}
-              </button>
-            )}
-            
-            {/* Main admin save button (always visible) */}
             <button
               onClick={save}
               disabled={saving || !!uploading}
@@ -537,7 +469,11 @@ return (
           </div>
         </section>
 
-        <CertificateDesigner value={course.certificate} onChange={certificate => set({ certificate })} upload={uploadToCloudinary} />
+        <CertificateDesigner
+          value={course.certificate}
+          onChange={certificate => set({ certificate })}
+          upload={uploadToCloudinary}
+        />
       </main>
 
       <style>{`
@@ -555,5 +491,14 @@ return (
         .editor-input:focus { border-color: #c97f1e; background: #fff; }
       `}</style>
     </div>
+  )
+}
+
+function Field({ label, children }) {
+  return (
+    <label className="block">
+      <span className="block text-xs font-medium text-slate-500 mb-1.5 uppercase tracking-wide">{label}</span>
+      {children}
+    </label>
   )
 }

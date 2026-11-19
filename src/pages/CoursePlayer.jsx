@@ -68,6 +68,7 @@ export default function CoursePlayer() {
   const [certOpen, setCertOpen] = useState(false)
   const [completeBusy, setCompleteBusy] = useState(false)
   const [certLocked, setCertLocked] = useState(false)
+  const [audioAutoPlay, setAudioAutoPlay] = useState(false)
 
   const lessons = useMemo(() => course ? flattenLessons(course) : [], [course])
 
@@ -93,6 +94,13 @@ export default function CoursePlayer() {
       setActiveLesson(lessons[0])
     }
   }, [lessons])
+
+  // Reset auto-play flag when lesson changes away from audio
+  useEffect(() => {
+    if (activeLesson?.type !== 'audio') {
+      setAudioAutoPlay(false)
+    }
+  }, [activeLesson?.type])
 
   if (allowed === false) return <Navigate to={`/courses/${courseId}`} replace />
   if (!course || allowed === null) return <Preloader label="Loading lesson" />
@@ -157,7 +165,12 @@ const lessonIdx  = lessons.findIndex(l => l.id === activeLesson?.id)
   const activeHasContent = !!(activeLesson?.youtubeId || activeLesson?.audioUrl || activeLesson?.content)
 
   function goTo(idx) {
-    if (idx >= 0 && idx < lessons.length) setActiveLesson(lessons[idx])
+    if (idx >= 0 && idx < lessons.length) {
+      const nextLesson = lessons[idx]
+      setActiveLesson(nextLesson)
+      // Auto-play audio when navigating to an audio lesson
+      setAudioAutoPlay(nextLesson.type === 'audio')
+    }
     setSidebarOpen(false)
   }
 
@@ -224,6 +237,7 @@ const lessonIdx  = lessons.findIndex(l => l.id === activeLesson?.id)
                   title={activeLesson.title}
                   onEnded={() => {}}
                   onTimeUpdate={(current, dur) => {}}
+                  autoPlay={audioAutoPlay}
                 />
               ) : (
                 <div className="flex justify-end mb-5">
