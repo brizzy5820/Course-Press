@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useCallback } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import {
   Undo2, Redo2, Plus, Play, X, Check, Loader2,
-  AlertTriangle, Send, CheckCircle2,
+  AlertTriangle, Send, CheckCircle2, GripVertical,
 } from 'lucide-react'
 import { getCourse, updateCourse } from '../../lib/data'
 import { useTheme } from '../../contexts/ThemeContext'
@@ -88,6 +88,56 @@ function LinkifiedText({ text, className = '' }) {
   return <span className={className}>{nodes}</span>
 }
 
+// ── Array Reordering Helpers for Drag and Drop ─────────────────────────────
+function moveArrayItem(array, fromIndex, toIndex, position = 'after') {
+  if (fromIndex === toIndex && (position === 'before' || position === 'after')) {
+    return array
+  }
+  const result = Array.from(array)
+  const [item] = result.splice(fromIndex, 1)
+
+  let targetIdx = toIndex
+  if (fromIndex < toIndex) {
+    targetIdx -= 1
+  }
+
+  let insertIdx = position === 'before' ? targetIdx : targetIdx + 1
+  insertIdx = Math.max(0, Math.min(insertIdx, result.length))
+  result.splice(insertIdx, 0, item)
+  return result
+}
+
+function moveLessonAcrossModules(curriculum, fromModIndex, fromLessonIndex, toModIndex, toLessonIndex, position = 'after') {
+  const newCurriculum = curriculum.map(m => ({
+    ...m,
+    lessons: [...(m.lessons || [])],
+  }))
+
+  const sourceLessons = newCurriculum[fromModIndex]?.lessons
+  if (!sourceLessons || !sourceLessons[fromLessonIndex]) return curriculum
+  const [movingLesson] = sourceLessons.splice(fromLessonIndex, 1)
+
+  const targetLessons = newCurriculum[toModIndex].lessons
+  let insertIdx = position === 'before' ? toLessonIndex : toLessonIndex + 1
+  insertIdx = Math.max(0, Math.min(insertIdx, targetLessons.length))
+  targetLessons.splice(insertIdx, 0, movingLesson)
+
+  return newCurriculum
+}
+
+function appendLessonToModule(curriculum, fromModIndex, fromLessonIndex, toModIndex) {
+  if (fromModIndex === toModIndex) return curriculum
+  const newCurriculum = curriculum.map(m => ({
+    ...m,
+    lessons: [...(m.lessons || [])],
+  }))
+  const sourceLessons = newCurriculum[fromModIndex]?.lessons
+  if (!sourceLessons || !sourceLessons[fromLessonIndex]) return curriculum
+  const [movingLesson] = sourceLessons.splice(fromLessonIndex, 1)
+  newCurriculum[toModIndex].lessons.push(movingLesson)
+  return newCurriculum
+}
+
 export default function CourseEditor() {
   const { courseId } = useParams()
   const { theme } = useTheme()
@@ -113,6 +163,11 @@ export default function CourseEditor() {
   // ── Confirmation Modal & Exit Prompt Modal states ────────────────────────
   const [confirmDialog,   setConfirmDialog]   = useState(null) // { title, message, details, confirmLabel, cancelLabel, confirmVariant, onConfirm, isAlert }
   const [exitPromptOpen,  setExitPromptOpen]  = useState(false)
+
+  // ── Drag & Drop state (for reordering modules & sub-modules) ──────────────
+  const [dragItem,     setDragItem]     = useState(null) // { type: 'module', index, id } | { type: 'lesson', modIndex, lessonIndex, id }
+  const [dragOver,     setDragOver]     = useState(null) // { type, index/modIndex, lessonIndex?, position }
+  const activeGripRef                   = useRef(null)   // id of module or lesson whose handle is being grabbed
 
   // ── Auto-save & Local Draft refs ──────────────────────────────────────────
   const courseRef          = useRef(null)
@@ -521,6 +576,117 @@ export default function CourseEditor() {
     })
   }
 
+  // ── Drag and Drop Reordering Handlers ─────────────────────────────────────
+  const handleDragEnd = useCallback(() => {
+    activeGripRef.current = null
+    setDragItem(null)
+    setDragOver(null)
+  }, [])
+
+  useEffect(() => {
+    const onWindowDragEnd = () => handleDragEnd()
+    window.addEventListener('dragend', onWindowDragEnd)
+    return () => window.removeEventListener('dragend', onWindowDragEnd)
+  }, [handleDragEnd])
+
+  const handleModuleDragStart = (e, index, modId) => {
+    e.dataTransfer.setData('text/plain', modId)
+    e.dataTransfer.effectAllowed = 'move'
+    setDragItem({ type: 'module', index, id: modId })
+  }
+
+  const handleModuleDragOver = (e, targetIndex) => {
+    e.preventDefault()
+    if (!dragItem || dragItem.type !== 'module') return
+    const rect = e.currentTarget.getBoundingClientRect()
+    const midY = rect.top + rect.height / 2
+    const position = e.clientY < midY ? 'before' : 'after'
+    setDragOver({ type: 'module', index: targetIndex, position })
+  }
+
+  const handleModuleDrop = (e, targetIndex) => {
+    e.preventDefault()
+    if (!dragItem || dragItem.type !== 'module') return
+    const fromIndex = dragItem.index
+    const position = dragOver?.position || 'after'
+    handleDragEnd()
+
+    if (fromIndex === targetIndex && (position === 'before' || position === 'after')) return
+
+    const newCurriculum = moveArrayItem(course.curriculum || [], fromIndex, targetIndex, position)
+    if (newCurriculum !== course.curriculum) {
+      set({ curriculum: newCurriculum })
+      toast('Modules rearranged', 'info')
+    }
+  }
+
+  const handleLessonDragStart = (e, modIndex, lessonIndex, lessonId) => {
+    e.stopPropagation()
+    e.dataTransfer.setData('text/plain', lessonId)
+    e.dataTransfer.effectAllowed = 'move'
+    setDragItem({ type: 'lesson', modIndex, lessonIndex, id: lessonId })
+  }
+
+  const handleLessonDragOver = (e, targetModIndex, targetLessonIndex) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!dragItem || dragItem.type !== 'lesson') return
+    const rect = e.currentTarget.getBoundingClientRect()
+    const midY = rect.top + rect.height / 2
+    const position = e.clientY < midY ? 'before' : 'after'
+    setDragOver({ type: 'lesson', modIndex: targetModIndex, lessonIndex: targetLessonIndex, position })
+  }
+
+  const handleLessonDrop = (e, targetModIndex, targetLessonIndex) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!dragItem || dragItem.type !== 'lesson') return
+    const { modIndex: fromModIndex, lessonIndex: fromLessonIndex } = dragItem
+    const position = dragOver?.position || 'after'
+    handleDragEnd()
+
+    let newCurriculum
+    if (fromModIndex === targetModIndex) {
+      if (fromLessonIndex === targetLessonIndex && (position === 'before' || position === 'after')) return
+      newCurriculum = course.curriculum.map((m, idx) => {
+        if (idx !== fromModIndex) return m
+        return {
+          ...m,
+          lessons: moveArrayItem(m.lessons || [], fromLessonIndex, targetLessonIndex, position),
+        }
+      })
+    } else {
+      newCurriculum = moveLessonAcrossModules(
+        course.curriculum || [],
+        fromModIndex,
+        fromLessonIndex,
+        targetModIndex,
+        targetLessonIndex,
+        position
+      )
+    }
+
+    if (newCurriculum) {
+      set({ curriculum: newCurriculum })
+      toast('Lessons rearranged', 'info')
+    }
+  }
+
+  const handleModuleDropZone = (e, targetModIndex) => {
+    e.preventDefault()
+    if (!dragItem || dragItem.type !== 'lesson') return
+    const { modIndex: fromModIndex, lessonIndex: fromLessonIndex } = dragItem
+    handleDragEnd()
+
+    if (fromModIndex === targetModIndex) return
+
+    const newCurriculum = appendLessonToModule(course.curriculum || [], fromModIndex, fromLessonIndex, targetModIndex)
+    if (newCurriculum) {
+      set({ curriculum: newCurriculum })
+      toast('Lesson moved to module', 'info')
+    }
+  }
+
   // ── Downloadable resource upload ─────────────────────────────────────────
   async function uploadResource(modId, lessonId, file) {
     setUploadErr('')
@@ -736,13 +902,13 @@ export default function CourseEditor() {
               </span>
             ) : hasUnpublished ? (
               <span className="text-xs text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1.5" title="Auto-saved as draft. Click 'Save for students' to publish live.">
-                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                Draft auto-saved
+                <span className="w-2 h-2 rounded-full bg-amber-500 " />
+              
               </span>
             ) : savedAt && !uploading && (
               <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1" title="All changes are published live for students">
                 <Check className="w-3.5 h-3.5" />
-                Live for students
+                Live 
               </span>
             )}
             <button
@@ -763,7 +929,7 @@ export default function CourseEditor() {
               ) : hasUnpublished ? (
                 <>
                   <Send className="w-3.5 h-3.5" />
-                  Save for students
+                  Save 
                 </>
               ) : (
                 <>
@@ -877,8 +1043,14 @@ export default function CourseEditor() {
 
         {/* ── Curriculum ── */}
         <section>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold text-slate-900">Curriculum</h2>
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+            <div className="flex items-center gap-2.5">
+              <h2 className="font-semibold text-slate-900">Curriculum</h2>
+              <span className="text-[11px] text-slate-500 dark:text-neutral-400 bg-slate-100 dark:bg-neutral-800 px-2 py-0.5 rounded-full font-medium flex items-center gap-1 border border-slate-200 dark:border-neutral-700">
+                <GripVertical className="w-3 h-3 text-slate-400" />
+                Drag to rearrange
+              </span>
+            </div>
             <button onClick={addModule} className="text-sm font-medium text-goldDeep hover:underline">
               + Add module
             </button>
@@ -886,64 +1058,166 @@ export default function CourseEditor() {
 
           <div className="space-y-4">
             {(course.curriculum || []).map((mod, mi) => (
-              <div key={mod.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-
-                {/* Module header */}
-                <div className="flex items-center gap-3 px-4 py-3 bg-slate-50 border-b border-slate-200">
-                  <span className="font-mono text-xs text-slate-400 font-medium shrink-0">M{mi + 1}</span>
-                  <input
-                    value={mod.title}
-                    onChange={e => updateModule(mod.id, { title: e.target.value })}
-                    className="flex-1 bg-transparent text-sm font-semibold text-slate-800 focus:outline-none"
-                    placeholder="Module title…"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => confirmRemoveModule(mod)}
-                    className="text-xs text-red-500 hover:text-red-700 shrink-0 font-medium"
-                  >
-                    Remove
-                  </button>
-                </div>
-
-                {/* Module title link preview */}
-                {mod.title && /^(https?:\/\/|www\.)/i.test(mod.title.trim()) && (
-                  <div className="px-4 py-2 border-b border-slate-100 bg-white">
-                    <LinkifiedText text={mod.title} className="text-xs text-slate-600 break-all" />
+              <div key={mod.id} className="space-y-1">
+                {/* Module drop indicator BEFORE */}
+                {dragOver?.type === 'module' && dragOver.index === mi && dragOver.position === 'before' && (
+                  <div className="flex items-center gap-2 py-1 animate-pulse">
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shadow-sm shrink-0" />
+                    <div className="h-1 flex-1 bg-gradient-to-r from-amber-500 to-amber-300 rounded-full" />
+                    <span className="text-[11px] font-mono font-semibold text-amber-600 dark:text-amber-400 shrink-0">Insert as M{mi + 1}</span>
                   </div>
                 )}
 
-                {/* Lessons */}
-                <div className="p-4 space-y-3">
+                <div
+                  draggable={true}
+                  onDragStart={(e) => {
+                    if (activeGripRef.current !== mod.id) {
+                      e.preventDefault()
+                      return
+                    }
+                    handleModuleDragStart(e, mi, mod.id)
+                  }}
+                  onDragOver={(e) => handleModuleDragOver(e, mi)}
+                  onDrop={(e) => handleModuleDrop(e, mi)}
+                  onDragEnd={handleDragEnd}
+                  className={`bg-white rounded-xl border border-slate-200 overflow-hidden transition-all duration-200 ${
+                    dragItem?.type === 'module' && dragItem.id === mod.id
+                      ? 'opacity-35 scale-[0.99] border-dashed border-amber-400 shadow-inner'
+                      : ''
+                  }`}
+                >
+                  {/* Module header */}
+                  <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 bg-slate-50 border-b border-slate-200">
+                    <div
+                      onMouseDown={() => { activeGripRef.current = mod.id }}
+                      onMouseUp={() => { activeGripRef.current = null }}
+                      className="cursor-grab active:cursor-grabbing p-1 -ml-1 text-slate-400 hover:text-slate-800 dark:hover:text-white hover:bg-slate-200/70 rounded transition shrink-0"
+                      title="Drag to rearrange module position"
+                    >
+                      <GripVertical className="w-4 h-4" />
+                    </div>
+
+                    <span className="font-mono text-xs text-slate-500 font-semibold shrink-0 bg-slate-200/80 px-1.5 py-0.5 rounded">
+                      M{mi + 1}
+                    </span>
+                    <input
+                      value={mod.title}
+                      onChange={e => updateModule(mod.id, { title: e.target.value })}
+                      className="flex-1 bg-transparent text-sm font-semibold text-slate-800 focus:outline-none"
+                      placeholder="Module title…"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => confirmRemoveModule(mod)}
+                      className="text-xs text-red-500 hover:text-red-700 shrink-0 font-medium"
+                    >
+                      Remove
+                    </button>
+                  </div>
+
+                  {/* Module title link preview */}
+                  {mod.title && /^(https?:\/\/|www\.)/i.test(mod.title.trim()) && (
+                    <div className="px-4 py-2 border-b border-slate-100 bg-white">
+                      <LinkifiedText text={mod.title} className="text-xs text-slate-600 break-all" />
+                    </div>
+                  )}
+
+                  {/* Lessons */}
+                  <div
+                    className="p-4 space-y-3"
+                    onDragOver={(e) => {
+                      if (dragItem?.type === 'lesson' && (!mod.lessons || mod.lessons.length === 0)) {
+                        e.preventDefault()
+                        setDragOver({ type: 'module-dropzone', modIndex: mi })
+                      }
+                    }}
+                    onDrop={(e) => {
+                      if (dragItem?.type === 'lesson' && (!mod.lessons || mod.lessons.length === 0)) {
+                        handleModuleDropZone(e, mi)
+                      }
+                    }}
+                  >
+                    {(!mod.lessons || mod.lessons.length === 0) && (
+                      <div
+                        className={`p-6 text-center rounded-lg border-2 border-dashed transition ${
+                          dragOver?.type === 'module-dropzone' && dragOver.modIndex === mi
+                            ? 'border-blue-500 bg-blue-50/70 text-blue-700 font-medium'
+                            : 'border-slate-200 text-slate-400'
+                        }`}
+                      >
+                        <p className="text-xs">
+                          {dragItem?.type === 'lesson' ? 'Drop lesson here to add to this module' : 'No lessons in this module yet. Add one below or drag a lesson here.'}
+                        </p>
+                      </div>
+                    )}
                   {(mod.lessons || []).map((lesson, li) => {
                     const previewId = youtubePreviewId(lesson.youtubeId)
                     return (
-                      <div key={lesson.id} className="border border-slate-200 rounded-lg p-3 space-y-2.5 bg-slate-50/50">
+                      <div key={lesson.id} className="space-y-1">
+                        {/* Lesson drop indicator BEFORE */}
+                        {dragOver?.type === 'lesson' && dragOver.modIndex === mi && dragOver.lessonIndex === li && dragOver.position === 'before' && (
+                          <div className="flex items-center gap-2 py-0.5 animate-pulse">
+                            <span className="w-2 h-2 rounded-full bg-blue-600 shadow-sm shrink-0" />
+                            <div className="h-0.5 flex-1 bg-gradient-to-r from-blue-600 to-blue-300 rounded-full" />
+                            <span className="text-[10px] font-mono font-semibold text-blue-600 shrink-0">Insert at {mi + 1}.{li + 1}</span>
+                          </div>
+                        )}
 
-                        {/* Lesson header */}
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-xs text-slate-400 shrink-0 font-medium">
-                            {mi + 1}.{li + 1}
-                          </span>
-                          <input
-                            value={lesson.title}
-                            onChange={e => updateLesson(mod.id, lesson.id, { title: e.target.value })}
-                            className="flex-1 text-sm font-medium text-slate-800 focus:outline-none bg-transparent border-b border-transparent focus:border-slate-300 pb-0.5"
-                            placeholder="Lesson title…"
-                          />
-<span className={`text-[10px] font-mono px-2 py-0.5 rounded font-medium shrink-0
-                             ${lesson.type === 'video' ? 'bg-blue-50 text-blue-600' : lesson.type === 'audio' ? 'bg-purple-50 text-purple-600' : 'bg-amber-50 text-amber-700'}`}>
-                             {lesson.type}
-                           </span>
-                          <button
-                            type="button"
-                            onClick={() => confirmRemoveLesson(mod.id, lesson)}
-                            title={`Delete lesson: ${lesson.title || 'Untitled'}`}
-                            className="text-slate-400 hover:text-red-500 transition text-xs shrink-0 p-1 rounded hover:bg-red-50 dark:hover:bg-red-950/30"
-                          >
-                            ✕
-                          </button>
-                        </div>
+                        <div
+                          draggable={true}
+                          onDragStart={(e) => {
+                            e.stopPropagation()
+                            if (activeGripRef.current !== lesson.id) {
+                              e.preventDefault()
+                              return
+                            }
+                            handleLessonDragStart(e, mi, li, lesson.id)
+                          }}
+                          onDragOver={(e) => handleLessonDragOver(e, mi, li)}
+                          onDrop={(e) => handleLessonDrop(e, mi, li)}
+                          onDragEnd={(e) => {
+                            e.stopPropagation()
+                            handleDragEnd()
+                          }}
+                          className={`border border-slate-200 rounded-lg p-3 space-y-2.5 bg-slate-50/50 transition-all duration-200 ${
+                            dragItem?.type === 'lesson' && dragItem.id === lesson.id
+                              ? 'opacity-35 scale-[0.99] border-dashed border-blue-400 bg-blue-50/40 shadow-inner'
+                              : ''
+                          }`}
+                        >
+                          {/* Lesson header */}
+                          <div className="flex items-center gap-2">
+                            <div
+                              onMouseDown={() => { activeGripRef.current = lesson.id }}
+                              onMouseUp={() => { activeGripRef.current = null }}
+                              className="cursor-grab active:cursor-grabbing p-1 -ml-1 text-slate-400 hover:text-slate-800 dark:hover:text-white hover:bg-slate-200/70 rounded transition shrink-0"
+                              title="Drag to rearrange lesson position"
+                            >
+                              <GripVertical className="w-3.5 h-3.5" />
+                            </div>
+
+                            <span className="font-mono text-xs text-slate-500 font-semibold shrink-0 bg-white border border-slate-200 px-1.5 py-0.5 rounded shadow-2xs">
+                              {mi + 1}.{li + 1}
+                            </span>
+                            <input
+                              value={lesson.title}
+                              onChange={e => updateLesson(mod.id, lesson.id, { title: e.target.value })}
+                              className="flex-1 text-sm font-medium text-slate-800 focus:outline-none bg-transparent border-b border-transparent focus:border-slate-300 pb-0.5"
+                              placeholder="Lesson title…"
+                            />
+                            <span className={`text-[10px] font-mono px-2 py-0.5 rounded font-medium shrink-0
+                              ${lesson.type === 'video' ? 'bg-blue-50 text-blue-600' : lesson.type === 'audio' ? 'bg-purple-50 text-purple-600' : 'bg-amber-50 text-amber-700'}`}>
+                              {lesson.type}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => confirmRemoveLesson(mod.id, lesson)}
+                              title={`Delete lesson: ${lesson.title || 'Untitled'}`}
+                              className="text-slate-400 hover:text-red-500 transition text-xs shrink-0 p-1 rounded hover:bg-red-50 dark:hover:bg-red-950/30"
+                            >
+                              ✕
+                            </button>
+                          </div>
 
                         {/* Lesson title link preview */}
                         {lesson.title && /^(https?:\/\/|www\.)/i.test(lesson.title.trim()) && (
@@ -1012,7 +1286,7 @@ export default function CourseEditor() {
 
                              {/* Direct upload button (shown when YouTube is connected and not uploading) */}
                              {ytConnected && !isUploading && !previewId && (
-                               <label className="group flex items-center justify-center gap-2 border-2 border-dashed border-blue-300 hover:border-blue-500 rounded-lg px-4 py-4 cursor-pointer bg-blue-50/50 hover:bg-blue-50 transition">
+                               <label className="group flex items-center justify-center gap-2 border-2 border-dashed border-blue-300 hover:border-blue-500 rounded-lg px-4 py-4 cursor-pointer bg-blue-50 hover:bg-blue-50 transition">
                                  <svg className="w-5 h-5 text-blue-500 group-hover:text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                                  </svg>
@@ -1201,6 +1475,16 @@ export default function CourseEditor() {
                             ))}
                           </ul>
                         )}
+                        </div>
+
+                        {/* Lesson drop indicator AFTER */}
+                        {dragOver?.type === 'lesson' && dragOver.modIndex === mi && dragOver.lessonIndex === li && dragOver.position === 'after' && (
+                          <div className="flex items-center gap-2 py-0.5 animate-pulse">
+                            <span className="w-2 h-2 rounded-full bg-blue-600 shadow-sm shrink-0" />
+                            <div className="h-0.5 flex-1 bg-gradient-to-r from-blue-600 to-blue-300 rounded-full" />
+                            <span className="text-[10px] font-mono font-semibold text-blue-600 shrink-0">Insert at {mi + 1}.{li + 2}</span>
+                          </div>
+                        )}
                       </div>
                     )
                   })}
@@ -1217,6 +1501,16 @@ export default function CourseEditor() {
                     </button>
                   </div>
                 </div>
+              </div>
+
+              {/* Module drop indicator AFTER */}
+              {dragOver?.type === 'module' && dragOver.index === mi && dragOver.position === 'after' && (
+                <div className="flex items-center gap-2 py-1 animate-pulse">
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shadow-sm shrink-0" />
+                  <div className="h-1 flex-1 bg-gradient-to-r from-amber-500 to-amber-300 rounded-full" />
+                  <span className="text-[11px] font-mono font-semibold text-amber-600 dark:text-amber-400 shrink-0">Insert as M{mi + 2}</span>
+                </div>
+              )}
               </div>
             ))}
           </div>
