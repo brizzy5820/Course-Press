@@ -57,7 +57,18 @@ export default function AdminDashboard() {
     }
   }, [])
 
-  useEffect(() => { refresh(); return () => clearTimeout(toastTimer.current) }, [refresh])
+  useEffect(() => {
+    refresh()
+    try {
+      const pending = sessionStorage.getItem('cp_post_route_toast')
+      if (pending) {
+        sessionStorage.removeItem('cp_post_route_toast')
+        const { message, type } = JSON.parse(pending)
+        showToast(type === 'error' ? 'error' : 'ok', message)
+      }
+    } catch {}
+    return () => clearTimeout(toastTimer.current)
+  }, [refresh, showToast])
   useEffect(() => {
     const url = new URL(window.location.href); url.searchParams.set('tab', tab)
     window.history.replaceState(null, '', url)
@@ -402,6 +413,11 @@ function CoursesPanel({ data, model, refresh, showToast, navigate }) {
                   <div className="flex items-center gap-2">
                     <p className="font-medium truncate">{c.title}</p>
                     <span className={`chip ${c.published ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400' : 'bg-neutral-200 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400'}`}>{c.published ? 'Live' : 'Draft'}</span>
+                    {c.hasUnpublishedChanges && (
+                      <span className="chip bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30">
+                        Unpublished draft
+                      </span>
+                    )}
                     {c.certificate?.enabled && c.certificate?.imageUrl && <span className="chip bg-amber-500/15 text-amber-700 dark:text-amber-400"><Award className="h-3 w-3" /> Certificate</span>}
                   </div>
                   <p className="text-xs text-muted mt-1">₦{Number(c.price || 0).toLocaleString()} · {lessons} lessons · {model.enrollByCourse.get(c.id) || 0} students · {model.courseCompletion(c.id)}% completed</p>

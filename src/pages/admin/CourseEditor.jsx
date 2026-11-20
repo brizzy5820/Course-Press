@@ -1,7 +1,12 @@
-import { useEffect, useState, useRef } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useEffect, useState, useRef, useCallback } from 'react'
+import { useParams, Link, useNavigate } from 'react-router-dom'
+import {
+  Undo2, Redo2, Plus, Play, X, Check, Loader2,
+  AlertTriangle, Send, CheckCircle2,
+} from 'lucide-react'
 import { getCourse, updateCourse } from '../../lib/data'
 import { useTheme } from '../../contexts/ThemeContext'
+import { useToast } from '../../contexts/ToastContext'
 import {
   getYouTubeStatus, connectYouTube, disconnectYouTube,
   getYouTubeAccessToken, uploadToYouTube,
@@ -86,12 +91,39 @@ function LinkifiedText({ text, className = '' }) {
 export default function CourseEditor() {
   const { courseId } = useParams()
   const { theme } = useTheme()
+  const toast = useToast()
+  const navigate = useNavigate()
   const isDark = theme === 'dark'
-  const [course,    setCourse]    = useState(null)
-  const [saving,    setSaving]    = useState(false)
-  const [savedAt,   setSavedAt]   = useState(null)
-  const [uploading, setUploading] = useState('')   // '' | 'cover' | 'resource'
-  const [uploadErr, setUploadErr] = useState('')
+
+  const [course,          setCourse]          = useState(null)
+  const [saving,          setSaving]          = useState(false)
+  const [publishing,      setPublishing]      = useState(false)
+  const [savedAt,         setSavedAt]         = useState(null)
+  const [hasUnpublished,  setHasUnpublished]  = useState(false)
+  const [uploading,       setUploading]       = useState('')   // '' | 'cover' | 'resource' | 'audio'
+  const [uploadErr,       setUploadErr]       = useState('')
+
+  // ── History (Undo / Redo) state ──────────────────────────────────────────
+  const [past,   setPast]   = useState([])
+  const [future, setFuture] = useState([])
+
+  // ── Video Preview Modal state ─────────────────────────────────────────────
+  const [previewModalVideo, setPreviewModalVideo] = useState(null) // { youtubeId, title }
+
+  // ── Confirmation Modal & Exit Prompt Modal states ────────────────────────
+  const [confirmDialog,   setConfirmDialog]   = useState(null) // { title, message, details, confirmLabel, cancelLabel, confirmVariant, onConfirm, isAlert }
+  const [exitPromptOpen,  setExitPromptOpen]  = useState(false)
+
+  // ── Auto-save & Local Draft refs ──────────────────────────────────────────
+  const courseRef          = useRef(null)
+  const autoSaveTimer      = useRef(null)
+  const hasUnpublishedRef  = useRef(false)
+  const savingRef          = useRef(false)
+
+  // Keep courseRef updated
+  useEffect(() => {
+    courseRef.current = course
+  }, [course])
 
   // ── YouTube connection state ──────────────────────────────────────────────
   const [ytConnected,  setYtConnected]  = useState(false)
@@ -112,29 +144,297 @@ export default function CourseEditor() {
           setYtChannel({ title: data.channelTitle, thumbnail: data.channelThumbnail })
         }
       })
-      .catch(() => { /* Functions URL not configured yet — that's ok */ })
+      .catch(() => { /* offline / local */ })
       .finally(() => setYtLoading(false))
   }, [])
 
-  useEffect(() => { getCourse(courseId).then(setCourse) }, [courseId])
+  // ── Load Course & restore draft if newer ───────────────────────────────────
+  useEffect(() => {
+    let isMounted = true
+    getCourse(courseId).then(remoteCourse => {
+      if (!isMounted || !remoteCourse) return
+      let initialData = { ...remoteCourse }
+      let isUnpublished = !!remoteCourse.hasUnpublishedChanges
 
-  if (!course) return <Preloader label="Loading editor" />
+      // If remote course has a draft stored in Firestore, use it as working state
+      if (remoteCourse.draft) {
+        initialData = { ...remoteCourse, ...remoteCourse.draft }
+        isUnpublished = true
+      }
 
-  function set(patch) { setCourse(c => ({ ...c, ...patch })) }
+      // If localStorage has an even newer unsaved draft, restore it
+      try {
+        const draftRaw = localStorage.getItem(`cp_draft_${courseId}`)
+        if (draftRaw) {
+          const localDraft = JSON.parse(draftRaw)
+          if (localDraft && localDraft.title !== undefined) {
+            initialData = { ...initialData, ...localDraft }
+            isUnpublished = true
+          }
+        }
+      } catch {}
 
-  async function save() {
+      setCourse(initialData)
+      courseRef.current = initialData
+      setHasUnpublished(isUnpublished)
+      hasUnpublishedRef.current = isUnpublished
+    })
+    return () => { isMounted = false }
+  }, [courseId])
+
+  // ── Auto-save Draft to Firestore & LocalStorage (Never pushes to live students) ─
+  const autoSaveDraft = useCallback(async () => {
+    const current = courseRef.current
+    if (!current || savingRef.current) return
+    savingRef.current = true
     setSaving(true)
     setUploadErr('')
     try {
-      const { id, ...data } = course
-      await updateCourse(courseId, data)
+      const { id, draft, hasUnpublishedChanges, draftSavedAt, lastPublishedAt, ...draftFields } = current
+      await updateCourse(courseId, {
+        draft: draftFields,
+        hasUnpublishedChanges: true,
+        draftSavedAt: new Date().toISOString(),
+      })
       setSavedAt(new Date())
+      setHasUnpublished(true)
+      hasUnpublishedRef.current = true
     } catch (err) {
-      setUploadErr(`Save failed: ${err.message}`)
+      console.error('Draft auto-save failed:', err)
     } finally {
+      savingRef.current = false
       setSaving(false)
     }
+  }, [courseId])
+
+  // ── Publish Draft for Students (Pushes live to students) ───────────────────
+  const publishForStudents = useCallback(async (options = { showNotification: true }) => {
+    const current = courseRef.current
+    if (!current || savingRef.current) return false
+    savingRef.current = true
+    setPublishing(true)
+    setUploadErr('')
+    try {
+      const { id, draft, hasUnpublishedChanges, draftSavedAt, ...liveData } = current
+      await updateCourse(courseId, {
+        ...liveData,
+        draft: null,
+        hasUnpublishedChanges: false,
+        lastPublishedAt: new Date().toISOString(),
+      })
+      try {
+        localStorage.removeItem(`cp_draft_${courseId}`)
+      } catch {}
+      setHasUnpublished(false)
+      hasUnpublishedRef.current = false
+      setSavedAt(new Date())
+      if (options.showNotification) {
+        toast('Course published! Changes are now live for students.', 'success')
+      }
+      return true
+    } catch (err) {
+      console.error('Publish failed:', err)
+      setUploadErr(`Publish failed: ${err.message}`)
+      if (options.showNotification) {
+        toast(`Publish failed: ${err.message}`, 'error')
+      }
+      return false
+    } finally {
+      savingRef.current = false
+      setPublishing(false)
+    }
+  }, [courseId, toast])
+
+  // ── Mutate course state with Undo tracking & debounced Auto-save ──────────
+  const set = useCallback((patch, recordHistory = true) => {
+    setCourse(prev => {
+      if (!prev) return prev
+      const next = typeof patch === 'function' ? patch(prev) : { ...prev, ...patch }
+
+      if (recordHistory) {
+        setPast(p => [...p.slice(-29), prev])
+        setFuture([])
+      }
+      setHasUnpublished(true)
+      hasUnpublishedRef.current = true
+      courseRef.current = next
+
+      try {
+        const { id, draft, hasUnpublishedChanges, draftSavedAt, lastPublishedAt, ...draftFields } = next
+        localStorage.setItem(`cp_draft_${courseId}`, JSON.stringify(draftFields))
+      } catch {}
+
+      // Debounce auto-save by 1600ms
+      if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
+      autoSaveTimer.current = setTimeout(() => {
+        autoSaveDraft()
+      }, 1600)
+
+      return next
+    })
+  }, [courseId, autoSaveDraft])
+
+  // ── Undo & Redo ────────────────────────────────────────────────────────────
+  const undo = useCallback(() => {
+    setPast(prevPast => {
+      if (!prevPast.length || !courseRef.current) return prevPast
+      const previous = prevPast[prevPast.length - 1]
+      const newPast = prevPast.slice(0, -1)
+
+      setFuture(prevFuture => [courseRef.current, ...prevFuture])
+      setCourse(previous)
+      courseRef.current = previous
+      setHasUnpublished(true)
+      hasUnpublishedRef.current = true
+
+      try {
+        const { id, draft, hasUnpublishedChanges, draftSavedAt, lastPublishedAt, ...draftFields } = previous
+        localStorage.setItem(`cp_draft_${courseId}`, JSON.stringify(draftFields))
+      } catch {}
+
+      if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
+      autoSaveTimer.current = setTimeout(() => autoSaveDraft(), 1600)
+
+      return newPast
+    })
+  }, [courseId, autoSaveDraft])
+
+  const redo = useCallback(() => {
+    setFuture(prevFuture => {
+      if (!prevFuture.length || !courseRef.current) return prevFuture
+      const next = prevFuture[0]
+      const newFuture = prevFuture.slice(1)
+
+      setPast(prevPast => [...prevPast.slice(-29), courseRef.current])
+      setCourse(next)
+      courseRef.current = next
+      setHasUnpublished(true)
+      hasUnpublishedRef.current = true
+
+      try {
+        const { id, draft, hasUnpublishedChanges, draftSavedAt, lastPublishedAt, ...draftFields } = next
+        localStorage.setItem(`cp_draft_${courseId}`, JSON.stringify(draftFields))
+      } catch {}
+
+      if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
+      autoSaveTimer.current = setTimeout(() => autoSaveDraft(), 1600)
+
+      return newFuture
+    })
+  }, [courseId, autoSaveDraft])
+
+  // ── Auto-save on exit, page close or component unmount ─────────────────────
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (hasUnpublishedRef.current && courseRef.current) {
+        try {
+          const { id, draft, hasUnpublishedChanges, draftSavedAt, lastPublishedAt, ...draftFields } = courseRef.current
+          localStorage.setItem(`cp_draft_${courseId}`, JSON.stringify(draftFields))
+        } catch {}
+      }
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
+      if (hasUnpublishedRef.current && courseRef.current) {
+        const { id, draft, hasUnpublishedChanges, draftSavedAt, lastPublishedAt, ...draftFields } = courseRef.current
+        updateCourse(courseId, {
+          draft: draftFields,
+          hasUnpublishedChanges: true,
+          draftSavedAt: new Date().toISOString(),
+        }).catch(() => {})
+      }
+    }
+  }, [courseId])
+
+  // ── Navigation handlers (Exit prompt & Post-route toast) ───────────────────
+  const handleBackClick = (e) => {
+    e.preventDefault()
+    if (hasUnpublishedRef.current) {
+      setExitPromptOpen(true)
+    } else {
+      try {
+        sessionStorage.setItem('cp_post_route_toast', JSON.stringify({
+          message: 'All changes are up to date.',
+          type: 'ok',
+        }))
+      } catch {}
+      navigate('/admin')
+    }
   }
+
+  const handleExitPublish = async () => {
+    setExitPromptOpen(false)
+    const ok = await publishForStudents({ showNotification: false })
+    try {
+      sessionStorage.setItem('cp_post_route_toast', JSON.stringify({
+        message: ok ? 'Course published for students!' : 'Could not publish course. Kept as draft.',
+        type: ok ? 'ok' : 'error',
+      }))
+    } catch {}
+    navigate('/admin')
+  }
+
+  const handleExitDraft = () => {
+    setExitPromptOpen(false)
+    if (courseRef.current) {
+      const { id, draft, hasUnpublishedChanges, draftSavedAt, lastPublishedAt, ...draftFields } = courseRef.current
+      updateCourse(courseId, {
+        draft: draftFields,
+        hasUnpublishedChanges: true,
+        draftSavedAt: new Date().toISOString(),
+      }).catch(() => {})
+    }
+    try {
+      sessionStorage.setItem('cp_post_route_toast', JSON.stringify({
+        message: 'Course draft saved automatically.',
+        type: 'ok',
+      }))
+    } catch {}
+    navigate('/admin')
+  }
+
+  // ── Keyboard shortcuts (Ctrl+Z, Ctrl+Y, Ctrl+Shift+Z, Escape) ─────────────
+  useEffect(() => {
+    function handleKeyDown(e) {
+      if (e.key === 'Escape') {
+        if (previewModalVideo) {
+          setPreviewModalVideo(null)
+          return
+        }
+        if (confirmDialog) {
+          setConfirmDialog(null)
+          return
+        }
+        if (exitPromptOpen) {
+          setExitPromptOpen(false)
+          return
+        }
+      }
+
+      // Ignore when focused in text inputs to allow native text editing
+      const tag = document.activeElement?.tagName?.toLowerCase()
+      const isTextInput = tag === 'input' || tag === 'textarea' || document.activeElement?.isContentEditable
+      if (isTextInput) return
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        if (e.shiftKey) {
+          e.preventDefault()
+          redo()
+        } else {
+          e.preventDefault()
+          undo()
+        }
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+        e.preventDefault()
+        redo()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [previewModalVideo, confirmDialog, exitPromptOpen, undo, redo])
 
   // ── Cover image ──────────────────────────────────────────────────────────
   async function handleCoverUpload(e) {
@@ -160,9 +460,23 @@ export default function CourseEditor() {
     set({ curriculum: course.curriculum.map(m => m.id === modId ? { ...m, ...patch } : m) })
   }
   function removeModule(modId) {
-    if (!confirm('Remove this module and all its lessons?')) return
     set({ curriculum: course.curriculum.filter(m => m.id !== modId) })
   }
+  function confirmRemoveModule(mod) {
+    const count = mod.lessons?.length || 0
+    setConfirmDialog({
+      title: 'Delete module?',
+      message: `Are you sure you want to delete "${mod.title || 'Untitled module'}"?`,
+      details: count > 0 ? `This will also delete all ${count} lesson${count === 1 ? '' : 's'} inside this module.` : undefined,
+      confirmLabel: 'Delete module',
+      confirmVariant: 'danger',
+      onConfirm: () => {
+        removeModule(mod.id)
+        setConfirmDialog(null)
+      },
+    })
+  }
+
   function addLesson(modId, type) {
     set({
       curriculum: course.curriculum.map(m =>
@@ -191,6 +505,19 @@ export default function CourseEditor() {
       curriculum: course.curriculum.map(m =>
         m.id !== modId ? m : { ...m, lessons: m.lessons.filter(l => l.id !== lessonId) }
       ),
+    })
+  }
+  function confirmRemoveLesson(modId, lesson) {
+    setConfirmDialog({
+      title: 'Delete lesson?',
+      message: `Are you sure you want to delete "${lesson.title || 'Untitled lesson'}"?`,
+      details: 'This will remove the lesson and its attached media from this course.',
+      confirmLabel: 'Delete lesson',
+      confirmVariant: 'danger',
+      onConfirm: () => {
+        removeLesson(modId, lesson.id)
+        setConfirmDialog(null)
+      },
     })
   }
 
@@ -243,15 +570,23 @@ export default function CourseEditor() {
     }
   }
 
-  async function handleDisconnectYouTube() {
-    if (!confirm('Disconnect your YouTube channel? You can reconnect anytime.')) return
-    try {
-      await disconnectYouTube()
-      setYtConnected(false)
-      setYtChannel({ title: '', thumbnail: '' })
-    } catch (err) {
-      setUploadErr(`Failed to disconnect: ${err.message}`)
-    }
+  function handleDisconnectYouTube() {
+    setConfirmDialog({
+      title: 'Disconnect YouTube?',
+      message: 'Are you sure you want to disconnect your YouTube channel? You can reconnect anytime.',
+      confirmLabel: 'Disconnect',
+      confirmVariant: 'danger',
+      onConfirm: async () => {
+        setConfirmDialog(null)
+        try {
+          await disconnectYouTube()
+          setYtConnected(false)
+          setYtChannel({ title: '', thumbnail: '' })
+        } catch (err) {
+          setUploadErr(`Failed to disconnect: ${err.message}`)
+        }
+      },
+    })
   }
 
   // ── Direct video upload to YouTube ────────────────────────────────────────
@@ -320,38 +655,122 @@ export default function CourseEditor() {
     abortControllers.current[lessonId]?.abort()
   }
 
+  if (!course) return <Preloader label="Loading editor" />
+
   return (
     <div className={`min-h-screen pb-24 ${isDark ? 'bg-neutral-950 text-white' : 'bg-slate-50 text-slate-900'}`}>
 
-      {/* Sticky save bar */}
-      <header className={`sticky top-0 z-10 ${isDark ? 'bg-neutral-900 border-neutral-800 shadow-none' : 'bg-white border-b border-slate-200 shadow-sm'}`}>
-        <div className="max-w-3xl mx-auto px-6 py-3.5 flex items-center justify-between">
-          <Link to="/admin" className="text-sm text-slate-500 hover:text-slate-800 transition">
-            ← All courses
-          </Link>
+      {/* Sticky header bar */}
+      <header className={`sticky top-0 z-30 ${isDark ? 'bg-neutral-900 border-neutral-800 shadow-none' : 'bg-white border-b border-slate-200 shadow-sm'}`}>
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-3 flex-wrap">
+          {/* Left: Back & Course Title */}
+          <div className="flex items-center gap-3 min-w-0">
+            <button
+              type="button"
+              onClick={handleBackClick}
+              className="text-xs sm:text-sm text-slate-500 hover:text-slate-800 dark:hover:text-white transition flex items-center gap-1 shrink-0"
+            >
+              ← <span className="hidden sm:inline">All courses</span>
+            </button>
+            <span className="text-slate-300 dark:text-neutral-700 hidden sm:inline">|</span>
+            <span className="text-xs sm:text-sm font-semibold text-slate-800 dark:text-white truncate max-w-[120px] sm:max-w-xs">
+              {course?.title || 'Untitled course'}
+            </span>
+          </div>
+
+          {/* Center: Undo / Redo & Add Module Immediately */}
+          <div className="flex items-center gap-2">
+            <div className="flex items-center bg-slate-100 dark:bg-neutral-800 rounded-lg p-0.5 border border-slate-200 dark:border-neutral-700">
+              <button
+                type="button"
+                onClick={undo}
+                disabled={past.length === 0}
+                title="Undo (Ctrl+Z)"
+                className="p-1.5 text-slate-600 dark:text-neutral-300 hover:text-slate-900 dark:hover:text-white hover:bg-white dark:hover:bg-neutral-700 rounded-md transition disabled:opacity-30 disabled:hover:bg-transparent"
+              >
+                <Undo2 className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={redo}
+                disabled={future.length === 0}
+                title="Redo (Ctrl+Y)"
+                className="p-1.5 text-slate-600 dark:text-neutral-300 hover:text-slate-900 dark:hover:text-white hover:bg-white dark:hover:bg-neutral-700 rounded-md transition disabled:opacity-30 disabled:hover:bg-transparent"
+              >
+                <Redo2 className="w-4 h-4" />
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={addModule}
+              title="Create a new module immediately"
+              className="flex items-center gap-1.5 text-xs font-semibold bg-amber-500/10 text-amber-700 dark:text-amber-400 hover:bg-amber-500/20 border border-amber-500/30 rounded-lg px-3 py-1.5 transition shrink-0"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>New module</span>
+            </button>
+          </div>
+
+          {/* Right: Auto-save status indicator & Save button */}
           <div className="flex items-center gap-3">
             {uploading && (
-              <span className="text-xs text-gold font-medium animate-pulse">
-                {uploading === 'cover' ? 'Uploading cover…' : uploading === 'audio' ? 'Uploading audio…' : 'Uploading file…'}
+              <span className="text-xs text-amber-600 font-medium animate-pulse flex items-center gap-1">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                {uploading === 'cover' ? 'Cover…' : uploading === 'audio' ? 'Audio…' : 'File…'}
               </span>
             )}
             {Object.values(videoUploads).some(u => u.status === 'uploading') && (
-              <span className="text-xs text-blue-600 font-medium animate-pulse">
-                Uploading video to YouTube…
+              <span className="text-xs text-blue-600 font-medium animate-pulse flex items-center gap-1">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                YouTube…
               </span>
             )}
             {uploadErr && (
-              <span className="text-xs text-red-600 max-w-xs truncate">{uploadErr}</span>
+              <span className="text-xs text-red-600 max-w-xs truncate" title={uploadErr}>{uploadErr}</span>
             )}
-            {savedAt && !saving && !uploading && (
-              <span className="text-xs text-slate-400">Saved {savedAt.toLocaleTimeString()}</span>
+            {saving ? (
+              <span className="text-xs text-amber-600 font-medium flex items-center gap-1">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                Saving draft…
+              </span>
+            ) : hasUnpublished ? (
+              <span className="text-xs text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1.5" title="Auto-saved as draft. Click 'Save for students' to publish live.">
+                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                Draft auto-saved
+              </span>
+            ) : savedAt && !uploading && (
+              <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1" title="All changes are published live for students">
+                <Check className="w-3.5 h-3.5" />
+                Live for students
+              </span>
             )}
             <button
-              onClick={save}
-              disabled={saving || !!uploading}
-              className="bg-slate-900 text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-black transition disabled:opacity-50"
+              type="button"
+              onClick={() => publishForStudents({ showNotification: true })}
+              disabled={publishing || saving || !!uploading || !hasUnpublished}
+              className={`flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition shrink-0
+                ${hasUnpublished
+                  ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-sm ring-1 ring-amber-500/50'
+                  : 'bg-slate-200 dark:bg-neutral-800 text-slate-500 dark:text-neutral-400 cursor-default'}`}
+              title={hasUnpublished ? 'Publish all draft changes for students' : 'All changes are published for students'}
             >
-              {saving ? 'Saving…' : 'Save'}
+              {publishing ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Publishing…
+                </>
+              ) : hasUnpublished ? (
+                <>
+                  <Send className="w-3.5 h-3.5" />
+                  Save for students
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                  Saved for students
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -478,7 +897,11 @@ export default function CourseEditor() {
                     className="flex-1 bg-transparent text-sm font-semibold text-slate-800 focus:outline-none"
                     placeholder="Module title…"
                   />
-                  <button onClick={() => removeModule(mod.id)} className="text-xs text-red-500 hover:text-red-700 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => confirmRemoveModule(mod)}
+                    className="text-xs text-red-500 hover:text-red-700 shrink-0 font-medium"
+                  >
                     Remove
                   </button>
                 </div>
@@ -513,8 +936,10 @@ export default function CourseEditor() {
                              {lesson.type}
                            </span>
                           <button
-                            onClick={() => removeLesson(mod.id, lesson.id)}
-                            className="text-slate-400 hover:text-red-500 transition text-xs shrink-0"
+                            type="button"
+                            onClick={() => confirmRemoveLesson(mod.id, lesson)}
+                            title={`Delete lesson: ${lesson.title || 'Untitled'}`}
+                            className="text-slate-400 hover:text-red-500 transition text-xs shrink-0 p-1 rounded hover:bg-red-50 dark:hover:bg-red-950/30"
                           >
                             ✕
                           </button>
@@ -628,35 +1053,65 @@ export default function CourseEditor() {
                                />
                              )}
 
-                             {/* Thumbnail preview */}
+                             {/* Thumbnail preview with Interactive Preview Button */}
                              {previewId && (
-                               <div className="flex items-center gap-3 bg-white rounded-lg p-2 border border-slate-100">
-                                 <img
-                                   src={`https://img.youtube.com/vi/${previewId}/mqdefault.jpg`}
-                                   alt=""
-                                   className="w-20 h-14 object-cover rounded shrink-0"
-                                   onError={e => { e.target.style.display = 'none' }}
-                                 />
-                                 <div>
-                                   <p className="text-xs font-medium text-slate-600">✓ Video detected</p>
-                                   <p className="font-mono text-[10px] text-slate-400 mt-0.5">{previewId}</p>
+                               <div className="flex items-center gap-3 bg-white dark:bg-neutral-900 rounded-lg p-2.5 border border-slate-200 dark:border-neutral-800 shadow-sm">
+                                 {/* Clickable thumbnail with Play overlay */}
+                                 <div
+                                   onClick={() => setPreviewModalVideo({ youtubeId: previewId, title: lesson.title || 'Video Lesson Preview' })}
+                                   className="relative group w-24 h-16 rounded-md overflow-hidden bg-slate-900 cursor-pointer shrink-0"
+                                   title="Click to preview video in popup"
+                                 >
+                                   <img
+                                     src={`https://img.youtube.com/vi/${previewId}/mqdefault.jpg`}
+                                     alt=""
+                                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                                     onError={e => { e.target.style.display = 'none' }}
+                                   />
+                                   <div className="absolute inset-0 bg-black/35 group-hover:bg-black/55 transition-colors flex items-center justify-center">
+                                     <div className="w-7 h-7 rounded-full bg-red-600 text-white flex items-center justify-center shadow-md group-hover:scale-110 transition-transform">
+                                       <Play className="w-3.5 h-3.5 fill-current ml-0.5" />
+                                     </div>
+                                   </div>
                                  </div>
-                                 {/* Replace button: allow uploading a new video even when one exists */}
-                                 {ytConnected && (
-                                   <label className="ml-auto text-[10px] font-medium text-blue-600 hover:underline cursor-pointer shrink-0">
-                                     Replace
-                                     <input
-                                       type="file"
-                                       accept="video/*"
-                                       className="hidden"
-                                       onChange={e => {
-                                         const file = e.target.files[0]
-                                         if (file) handleVideoUpload(mod.id, lesson.id, file)
-                                         e.target.value = ''
-                                       }}
-                                     />
-                                   </label>
-                                 )}
+
+                                 <div className="min-w-0 flex-1">
+                                   <div className="flex items-center gap-2 flex-wrap">
+                                     <p className="text-xs font-semibold text-slate-700 dark:text-neutral-200 flex items-center gap-1.5">
+                                       <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                                       Video ready
+                                     </p>
+                                     <span className="font-mono text-[10px] text-slate-400 truncate">{previewId}</span>
+                                   </div>
+
+                                   <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+                                     <button
+                                       type="button"
+                                       onClick={() => setPreviewModalVideo({ youtubeId: previewId, title: lesson.title || 'Video Lesson Preview' })}
+                                       className="text-xs font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400 flex items-center gap-1 hover:underline"
+                                     >
+                                       <Play className="w-3 h-3 fill-current" />
+                                       Preview video
+                                     </button>
+
+                                     {/* Replace button: allow uploading a new video even when one exists */}
+                                     {ytConnected && (
+                                       <label className="text-xs font-medium text-slate-500 hover:text-slate-800 dark:hover:text-neutral-300 hover:underline cursor-pointer shrink-0">
+                                         Replace
+                                         <input
+                                           type="file"
+                                           accept="video/*"
+                                           className="hidden"
+                                           onChange={e => {
+                                             const file = e.target.files[0]
+                                             if (file) handleVideoUpload(mod.id, lesson.id, file)
+                                             e.target.value = ''
+                                           }}
+                                         />
+                                       </label>
+                                     )}
+                                   </div>
+                                 </div>
                                </div>
                              )}
                            </div>
@@ -773,6 +1228,165 @@ export default function CourseEditor() {
           upload={uploadToCloudinary}
         />
       </main>
+
+      {/* ── Video Preview Modal ── */}
+      {previewModalVideo && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn"
+          onClick={() => setPreviewModalVideo(null)}
+        >
+          <div
+            className="relative w-full max-w-3xl bg-neutral-900 text-white rounded-2xl overflow-hidden shadow-2xl border border-neutral-800"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-neutral-800 bg-neutral-950/70">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-7 h-7 rounded-lg bg-red-600/20 text-red-500 flex items-center justify-center shrink-0">
+                  <Play className="w-3.5 h-3.5 fill-current ml-0.5" />
+                </div>
+                <h3 className="font-semibold text-sm truncate">
+                  {previewModalVideo.title}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPreviewModalVideo(null)}
+                className="text-neutral-400 hover:text-white p-1.5 rounded-lg hover:bg-neutral-800 transition"
+                title="Close preview (Esc)"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Video Player */}
+            <div className="aspect-video w-full bg-black">
+              <iframe
+                src={`https://www.youtube-nocookie.com/embed/${previewModalVideo.youtubeId}?autoplay=1&rel=0`}
+                title={previewModalVideo.title}
+                className="w-full h-full border-0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Confirmation Modal ── */}
+      {confirmDialog && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn"
+          onClick={() => setConfirmDialog(null)}
+        >
+          <div
+            className={`relative w-full max-w-md rounded-2xl p-6 shadow-2xl border ${
+              isDark ? 'bg-neutral-900 border-neutral-800 text-white' : 'bg-white border-slate-200 text-slate-900'
+            }`}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-4">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                confirmDialog.confirmVariant === 'danger'
+                  ? 'bg-red-500/10 text-red-600 dark:text-red-400'
+                  : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+              }`}>
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="font-semibold text-base">{confirmDialog.title}</h3>
+                <p className="text-sm text-slate-500 dark:text-neutral-400 mt-1">
+                  {confirmDialog.message}
+                </p>
+                {confirmDialog.details && (
+                  <p className="text-xs text-slate-400 dark:text-neutral-500 mt-2 font-mono bg-slate-50 dark:bg-neutral-800/50 p-2 rounded-lg">
+                    {confirmDialog.details}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 mt-6">
+              {!confirmDialog.isAlert && (
+                <button
+                  type="button"
+                  onClick={() => setConfirmDialog(null)}
+                  className="px-4 py-2 text-xs font-semibold rounded-lg text-slate-600 dark:text-neutral-300 hover:bg-slate-100 dark:hover:bg-neutral-800 transition"
+                >
+                  {confirmDialog.cancelLabel || 'Cancel'}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={confirmDialog.onConfirm}
+                className={`px-4 py-2 text-xs font-semibold rounded-lg text-white transition ${
+                  confirmDialog.confirmVariant === 'danger'
+                    ? 'bg-red-600 hover:bg-red-700'
+                    : 'bg-amber-600 hover:bg-amber-700'
+                }`}
+              >
+                {confirmDialog.confirmLabel || 'Confirm'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Route-Off Exit Prompt Modal (Unpublished changes) ── */}
+      {exitPromptOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn"
+          onClick={() => setExitPromptOpen(false)}
+        >
+          <div
+            className={`relative w-full max-w-lg rounded-2xl p-6 shadow-2xl border ${
+              isDark ? 'bg-neutral-900 border-neutral-800 text-white' : 'bg-white border-slate-200 text-slate-900'
+            }`}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-4">
+              <div className="w-11 h-11 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="font-semibold text-lg">Unpublished Draft Changes</h3>
+                <p className="text-sm text-slate-600 dark:text-neutral-300 mt-1">
+                  You have edits saved in your draft. Students currently see the previously published version of this course.
+                </p>
+                <p className="text-xs text-slate-500 dark:text-neutral-400 mt-2">
+                  Would you like to publish these changes for students now, or keep them saved as a draft to edit later?
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2.5 mt-6 pt-4 border-t border-slate-100 dark:border-neutral-800">
+              <button
+                type="button"
+                onClick={() => setExitPromptOpen(false)}
+                className="order-3 sm:order-1 px-4 py-2 text-xs font-semibold rounded-lg text-slate-600 dark:text-neutral-400 hover:bg-slate-100 dark:hover:bg-neutral-800 transition text-center"
+              >
+                Stay in editor
+              </button>
+              <button
+                type="button"
+                onClick={handleExitDraft}
+                className="order-2 px-4 py-2 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-neutral-800 text-slate-700 dark:text-neutral-200 hover:bg-slate-200 dark:hover:bg-neutral-700 transition text-center"
+              >
+                Keep as draft & exit
+              </button>
+              <button
+                type="button"
+                onClick={handleExitPublish}
+                disabled={publishing}
+                className="order-1 sm:order-3 px-4 py-2 text-xs font-semibold rounded-lg bg-amber-600 hover:bg-amber-700 text-white transition flex items-center justify-center gap-1.5 shadow-sm"
+              >
+                <Send className="w-3.5 h-3.5" />
+                Save for students & exit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style>{`
         .editor-input {

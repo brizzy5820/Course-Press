@@ -7,11 +7,15 @@ import { ThemeProvider } from './contexts/ThemeContext.jsx'
 import './styles/index.css'
 
 const isDev = import.meta.env.DEV
+const routerFuture = {
+  v7_startTransition: true,
+  v7_relativeSplatPath: true,
+}
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   isDev ? (
     <React.StrictMode>
-      <BrowserRouter>
+      <BrowserRouter future={routerFuture}>
         <AuthProvider>
           <ThemeProvider>
             <App />
@@ -20,7 +24,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
       </BrowserRouter>
     </React.StrictMode>
   ) : (
-    <BrowserRouter>
+    <BrowserRouter future={routerFuture}>
       <AuthProvider>
         <ThemeProvider>
           <App />
