@@ -9,10 +9,10 @@ import { doc, setDoc, serverTimestamp } from 'firebase/firestore'
 import {
   PlayCircle, FileText, Lock, Clock,
   CheckCircle2, Check, ArrowRight, Loader,
-  ChevronDown, ChevronRight, ExternalLink, Award, Music,
+  ChevronDown, ChevronRight, ExternalLink,
 } from 'lucide-react'
 import { auth, db } from '../firebase'
-import { getCourse, isEnrolled, createPendingOrder, getProgress, markLessonComplete } from '../lib/data'
+import { getCourse, isEnrolled, createPendingOrder, getProgress } from '../lib/data'
 import Sidebar from '../components/Sidebar'
 import {
   accountExists,
@@ -21,42 +21,9 @@ import {
 } from '../lib/access'
 import { useAuth } from '../contexts/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
-import { useToast } from '../contexts/ToastContext'
-import CertificateModal, { hasCertificate } from '../components/CertificateModal'
-import CertificateLockModal from '../components/CertificateLockModal'
 import VideoPlayer from '../components/VideoPlayer'
 import TopNav from '../components/TopNav'
 import Preloader from '../components/Preloader'
-
-// Render links in plain text
-function linkifyToReact(text, keyPrefix = 'link') {
-  if (!text) return []
-  const str = String(text)
-  const parts = str.split(/(https?:\/\/[^\s<>()"]+|www\.[^\s<>()"]+)/gi)
-  return parts.filter(Boolean).map((part, i) => {
-    const isUrl = /^(https?:\/\/|www\.)/i.test(part)
-    if (!isUrl) return <span key={`${keyPrefix}-${i}`}>{part}</span>
-    const href = part.startsWith('http') ? part : `https://${part}`
-    return (
-      <a
-        key={`${keyPrefix}-${i}`}
-        href={href}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="text-blue-600 hover:underline break-all"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {part}
-      </a>
-    )
-  })
-}
-
-function LinkifiedText({ text, className = '' }) {
-  if (!text) return null
-  const nodes = linkifyToReact(text, 'lt')
-  return <span className={className}>{nodes}</span>
-}
 
 function truncateHalf(text = '') {
   if (!text) return ''
@@ -132,7 +99,6 @@ export default function CourseDetail() {
   const { user, profile } = useAuth()
   const { theme }    = useTheme()
   const isDark       = theme === 'dark'
-  const toast        = useToast()
 
   const [course,      setCourse]      = useState(null)
   const [enrolled,    setEnrolled]    = useState(false)
@@ -143,8 +109,6 @@ export default function CourseDetail() {
   const [completedIds, setCompletedIds] = useState([])
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [certOpen, setCertOpen] = useState(false)
-  const [certLocked, setCertLocked] = useState(false)
 
   // accordion state
   const [openModules, setOpenModules] = useState(() => new Set())
@@ -247,9 +211,8 @@ export default function CourseDetail() {
                 await activatePendingEnrollments(uid, effectiveEmail)
                 navigate(`/dashboard/${courseId}`, { replace: true })
               } else {
-                const cleanEmail = effectiveEmail.trim().toLowerCase()
-                await setDoc(doc(db, 'pendingEnrollments', `${cleanEmail}_${courseId}`), {
-                  name: effectiveName, email: cleanEmail, courseId,
+                await setDoc(doc(db, 'pendingEnrollments', `${effectiveEmail}_${courseId}`), {
+                  name: effectiveName, email: effectiveEmail, courseId,
                   source: 'paystack', createdAt: serverTimestamp(),
                 })
                 await setDoc(doc(db, 'orders', reference), { status: 'paid' }, { merge: true })
@@ -276,32 +239,6 @@ export default function CourseDetail() {
   }
 
   const totalLessons = (course.curriculum || []).reduce((s, m) => s + (m.lessons?.length || 0), 0)
-  const allComplete  = totalLessons > 0
-    && (course.curriculum || []).every(m => (m.lessons || []).every(l => completedIds.includes(l.id)))
-  const lessonIds    = (course.curriculum || []).flatMap(m => (m.lessons || []).map(l => l.id))
-  const doneCount    = lessonIds.filter(id => completedIds.includes(id)).length
-  const remaining    = totalLessons - doneCount
-
-  // Certificate prompt after the outline: enrolled students who finished every
-  // lesson open the certificate; anyone else gets a modal explaining what's missing.
-  function requestCertificate() {
-    if (enrolled && allComplete) { setCertOpen(true); return }
-    setCertLocked(true)
-  }
-
-  // Toggle the check circle for a lesson. Lessons with no uploaded content
-  // (no video/text) can't be completed — tell the student instead.
-  async function toggleLessonComplete(lesson) {
-    const hasContent = !!(lesson.youtubeId || lesson.embedUrl || lesson.videoUrl || lesson.content)
-    if (!hasContent) { toast('No course content yet — this lesson has nothing to complete.', 'info'); return }
-    const done = !completedIds.includes(lesson.id)
-    try {
-      await markLessonComplete(user.uid, courseId, lesson.id, done)
-      setCompletedIds(ids => done ? [...ids, lesson.id] : ids.filter(i => i !== lesson.id))
-    } catch {
-      toast('Could not update your progress. Please try again.', 'error')
-    }
-  }
 
   return (
     <div className={`min-h-screen relative overflow-x-hidden transition-colors duration-200 ${isDark ? 'bg-neutral-950' : 'bg-[#F7F8FA]'}`}>
@@ -336,8 +273,8 @@ export default function CourseDetail() {
 
           {/* Hero */}
           <p className={`font-mono text-xs uppercase tracking-[0.2em] mb-3 ${isDark ? 'text-neutral-500' : 'text-amber-600'}`}>Course</p>
-           <h1 className={`font-sans text-2xl lg:text-4xl font-semibold leading-tight ${isDark ? 'text-white' : 'text-black'}`}><LinkifiedText text={course.title} /></h1>
-           <p className={`text-lg mt-3 leading-relaxed ${isDark ? 'text-neutral-400' : 'text-zinc-600'}`}><LinkifiedText text={course.subtitle} /></p>
+          <h1 className={`font-sans text-2xl lg:text-4xl font-semibold leading-tight ${isDark ? 'text-white' : 'text-black'}`}>{course.title}</h1>
+          <p className={`text-lg mt-3 leading-relaxed ${isDark ? 'text-neutral-400' : 'text-zinc-600'}`}>{course.subtitle}</p>
 
           {/* Stats */}
           <div className="flex flex-wrap items-center gap-2 mt-6">
@@ -374,9 +311,9 @@ export default function CourseDetail() {
 
           {/* Description */}
           {course.description && (
-             <div className={`prose-reader mt-8 whitespace-pre-line leading-[1.85] text-[1.02rem] ${isDark ? 'text-neutral-300' : 'text-black/80'}`}>
-               <LinkifiedText text={course.description} />
-             </div>
+            <div className={`prose-reader mt-8 whitespace-pre-line leading-[1.85] text-[1.02rem] ${isDark ? 'text-neutral-300' : 'text-black/80'}`}>
+              {course.description}
+            </div>
           )}
 
           {/* Curriculum */}
@@ -471,17 +408,17 @@ export default function CourseDetail() {
               </div>
 
               {/* Module title */}
-               <h3
-                 className={`text-sm font-semibold leading-snug ${
-                   isModuleComplete
-                     ? isDark
-                       ? 'text-emerald-600 line-through decoration-1 decoration-emerald-500'
-                       : 'text-emerald-600 line-through decoration-1 decoration-emerald-500'
-                     : isDark ? 'text-white' : 'text-zinc-900'
-                 }`}
-               >
-                 <LinkifiedText text={mod.title} />
-               </h3>
+              <h3
+                className={`text-sm font-semibold leading-snug ${
+                  isModuleComplete
+                    ? isDark
+                      ? 'text-emerald-400 line-through decoration-2 decoration-emerald-500'
+                      : 'text-emerald-600 line-through decoration-2 decoration-emerald-500'
+                    : isDark ? 'text-white' : 'text-zinc-900'
+                }`}
+              >
+                {mod.title}
+              </h3>
             </div>
           </div>
         </button>
@@ -500,12 +437,11 @@ export default function CourseDetail() {
             <div className="divide-y divide-transparent">
               {lessons.map((lesson, li) => {
                 const isVideo = lesson.type === 'video'
-                const isAudio = lesson.type === 'audio'
                 const isText = lesson.type === 'text'
                 const isLessonComplete = completedIds.includes(lesson.id)
 
                 const expandable =
-                  enrolled && (isVideo || isAudio || isText)
+                  enrolled && (isVideo || isText)
 
                 const lessonOpen =
                   openLessons.has(lesson.id)
@@ -521,7 +457,7 @@ export default function CourseDetail() {
                       className={`px-5 py-3 transition border-b border-gray-200 dark:border-neutral-800 ${
                         expandable
                           ? isDark
-                            ? 'hover:bg-black'
+                            ? 'hover:bg-neutral-900'
                             : 'hover:bg-zinc-50'
                           : ''
                       }`}
@@ -596,14 +532,6 @@ export default function CourseDetail() {
                                     : 'text-zinc-600'
                                 }`}
                               />
-                            ) : isAudio ? (
-                              <Music
-                                className={`h-3.5 w-3.5 ${
-                                  isDark
-                                    ? 'text-neutral-300'
-                                    : 'text-zinc-600'
-                                }`}
-                              />
                             ) : (
                               <FileText
                                 className={`h-3.5 w-3.5 ${
@@ -623,9 +551,7 @@ export default function CourseDetail() {
                             >
                               {isVideo
                                 ? 'Video'
-                                : isAudio
-                                  ? 'Audio'
-                                  : 'Reading'}
+                                : 'Reading'}
                             </span>
 
                             {isLessonComplete && (
@@ -634,17 +560,17 @@ export default function CourseDetail() {
                           </div>
 
                           {/* Submodule title */}
-                           <h4
-                             className={`mt-1 text-sm font-semibold leading-snug break-words ${
-                               isLessonComplete
-                                 ? isDark
-                                   ? 'text-emerald-400 line-through decoration-2 decoration-emerald-500'
-                                   : 'text-emerald-600 line-through decoration-2 decoration-emerald-500'
-                                 : isDark ? 'text-neutral-100' : 'text-zinc-900'
-                             }`}
-                           >
-                             <LinkifiedText text={lesson.title} />
-                           </h4>
+                          <h4
+                            className={`mt-1 text-sm font-semibold leading-snug break-words ${
+                              isLessonComplete
+                                ? isDark
+                                  ? 'text-emerald-400 line-through decoration-2 decoration-emerald-500'
+                                  : 'text-emerald-600 line-through decoration-2 decoration-emerald-500'
+                                : isDark ? 'text-neutral-100' : 'text-zinc-900'
+                            }`}
+                          >
+                            {lesson.title}
+                          </h4>
 
                           {/* Metadata */}
                           <div
@@ -674,7 +600,7 @@ export default function CourseDetail() {
                           </div>
                         </button>
 
-                        {/* Completion / lock — a toggle for enrolled students */}
+                        {/* Completion / lock */}
                         <div className="shrink-0 pt-1">
                           {!enrolled ? (
                             <Lock
@@ -684,24 +610,17 @@ export default function CourseDetail() {
                                   : 'text-zinc-400'
                               }`}
                             />
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => toggleLessonComplete(lesson)}
-                              aria-pressed={isLessonComplete}
-                              aria-label={isLessonComplete ? 'Mark lesson as not complete' : 'Mark lesson as complete'}
-                              className={`flex h-5 w-5 items-center justify-center rounded-full border-2 transition
-                                ${isLessonComplete
-                                  ? isDark
-                                    ? 'bg-emerald-500 border-emerald-500 text-neutral-950'
-                                    : 'bg-emerald-600 border-emerald-600 text-white'
-                                  : isDark
-                                    ? 'border-neutral-600 hover:border-emerald-400'
-                                    : 'border-zinc-300 hover:border-emerald-500'}`}
+                          ) : isLessonComplete ? (
+                            <div
+                              className={`flex h-5 w-5 items-center justify-center rounded-full ${
+                                isDark
+                                  ? 'bg-emerald-500 text-neutral-950'
+                                  : 'bg-emerald-600 text-white'
+                              }`}
                             >
-                              {isLessonComplete && <Check className="h-3 w-3" />}
-                            </button>
-                          )}
+                              <Check className="h-3 w-3" />
+                            </div>
+                          ) : null}
                         </div>
                       </div>
                     </div>
@@ -717,7 +636,7 @@ export default function CourseDetail() {
                             : 'bg-white'
                         }`}
                       >
-{/* FULL-WIDTH VIDEO / CONTENT */}
+                        {/* FULL-WIDTH VIDEO / CONTENT */}
                         {isVideo && (
                           <div className="w-full">
                             {lesson.videoUrl ? (
@@ -769,20 +688,6 @@ export default function CourseDetail() {
                                 </p>
                               </div>
                             )}
-                          </div>
-                        )}
-
-{/* Audio lesson */}
-                        {isAudio && lesson.audioUrl && (
-                          <div className="w-full">
-                            <audio
-                              controls
-                              preload="metadata"
-                              src={lesson.audioUrl}
-                              className="w-full"
-                            >
-                              Your browser doesn't support audio playback.
-                            </audio>
 
                             <button
                               type="button"
@@ -804,15 +709,17 @@ export default function CourseDetail() {
                         {/* TEXT LESSON */}
                         {isText && lesson.content && (
                           <div className="w-full">
-                             <p
-                               className={`text-xs leading-relaxed ${
-                                 isDark
-                                   ? 'text-neutral-400'
-                                   : 'text-zinc-600'
-                               }`}
-                             >
-                               <LinkifiedText text={truncateHalf(lesson.content)} />
-                             </p>
+                            <p
+                              className={`text-xs leading-relaxed ${
+                                isDark
+                                  ? 'text-neutral-400'
+                                  : 'text-zinc-600'
+                              }`}
+                            >
+                              {truncateHalf(
+                                lesson.content
+                              )}
+                            </p>
 
                             <button
                               type="button"
@@ -842,23 +749,6 @@ export default function CourseDetail() {
     )
   })}
 </div>
-
-          {/* Certificate prompt — after the outline, only when the creator
-              uploaded a certificate template for this course */}
-          {hasCertificate(course) && (
-            <div className={`mt-10 border-t pt-8 ${isDark ? 'border-neutral-800' : 'border-amber-200'}`}>
-              <button
-                type="button"
-                onClick={requestCertificate}
-                className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold py-3.5 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60"
-              >
-                <Award className="h-4 w-4" /> View certificate
-              </button>
-              <p className={`text-xs text-center mt-2.5 ${isDark ? 'text-neutral-500' : 'text-zinc-500'}`}>
-                Available once you finish every lesson in this course.
-              </p>
-            </div>
-          )}
 
           {/* CTA */}
           <div id="checkout" className={`mt-14 border-t pt-10 ${isDark ? 'border-neutral-800' : 'border-amber-200'}`}>
@@ -981,28 +871,7 @@ export default function CourseDetail() {
         topLink={{ to: `/dashboard/${courseId}`, label: 'Open course player' }}
         onBack={() => navigate(-1)}
         desktopVisible={false}
-        onCertificate={requestCertificate}
       />
-
-      {certOpen && (
-        <CertificateModal
-          open
-          course={course}
-          name={profile?.name || user?.displayName || user?.email?.split('@')[0] || 'Student'}
-          onClose={() => setCertOpen(false)}
-        />
-      )}
-
-      {certLocked && (
-        <CertificateLockModal
-          open
-          onClose={() => setCertLocked(false)}
-          message={enrolled
-            ? `Finish all ${totalLessons} lessons in ${course.title} to unlock your certificate — ${remaining} lesson${remaining === 1 ? '' : 's'} to go.`
-            : `Enroll in ${course.title} to earn its certificate. Once you finish every lesson you can view and download it here.`}
-          action={enrolled ? { label: 'Continue learning', onClick: () => { setCertLocked(false); navigate(`/dashboard/${courseId}`) } } : null}
-        />
-      )}
     </div>
   )
 }
