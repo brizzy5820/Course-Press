@@ -30,15 +30,20 @@ export default function Certificates() {
     listMyEnrollments(user.uid).then(async enrollments => {
       const rows = await Promise.all(
         enrollments.map(async e => {
-          const course = await getCourse(e.courseId)
-          if (!course) return null
-          const progress = await getProgress(user.uid, e.courseId)
-          const lessons  = flattenLessons(course)
-          const ids      = lessons.map(l => l.id)
-          const done     = (progress.completedLessonIds || []).filter(id => ids.includes(id)).length
-          const total    = ids.length
-          const percent  = total ? Math.round((done / total) * 100) : 0
-          return { course, percent, completed: done, total }
+          try {
+            const course = await getCourse(e.courseId)
+            if (!course) return null
+            const progress = await getProgress(user.uid, e.courseId)
+            const lessons  = flattenLessons(course)
+            const ids      = lessons.map(l => l.id)
+            const done     = (progress?.completedLessonIds || []).filter(id => ids.includes(id)).length
+            const total    = ids.length
+            const percent  = total ? Math.round((done / total) * 100) : 0
+            return { course, percent, completed: done, total }
+          } catch (err) {
+            console.warn('Certificates could not load course:', e.courseId, err)
+            return null
+          }
         })
       )
       if (!alive) return
@@ -48,6 +53,9 @@ export default function Certificates() {
           .filter(Boolean)
           .filter(i => i.total > 0 && i.percent === 100 && hasCertificate(i.course))
       )
+    }).catch(err => {
+      console.warn('Certificates enrollments load error:', err)
+      if (alive) setItems([])
     })
     return () => { alive = false }
   }, [user])

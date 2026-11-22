@@ -44,24 +44,37 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!user) return
+    let isMounted = true
     listMyEnrollments(user.uid).then(async enrollments => {
+      if (!isMounted) return
       const withCourses = await Promise.all(
         enrollments.map(async e => {
-          const course    = await getCourse(e.courseId)
-          const progress  = await getProgress(user.uid, e.courseId)
-          const lessons   = flattenLessons(course)
-          const total     = lessons.length
-          const completed = progress.completedLessonIds.length
-          return {
-            course,
-            percent:   total ? Math.round((completed / total) * 100) : 0,
-            completed,
-            total,
+          try {
+            const course    = await getCourse(e.courseId)
+            const progress  = await getProgress(user.uid, e.courseId)
+            const lessons   = flattenLessons(course)
+            const total     = lessons.length
+            const completed = progress?.completedLessonIds?.length || 0
+            return {
+              course,
+              percent:   total ? Math.round((completed / total) * 100) : 0,
+              completed,
+              total,
+            }
+          } catch (err) {
+            console.warn('Dashboard could not load course:', e.courseId, err)
+            return null
           }
         })
       )
-      setItems(withCourses.filter(i => i.course))
+      if (isMounted) {
+        setItems(withCourses.filter(i => i && i.course))
+      }
+    }).catch(err => {
+      console.warn('Dashboard enrollments load error:', err)
+      if (isMounted) setItems([])
     })
+    return () => { isMounted = false }
   }, [user])
 
   async function handleLogout() {

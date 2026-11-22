@@ -74,12 +74,12 @@ export default function CoursePlayer() {
 
   useEffect(() => {
     if (!user) return
-    isEnrolled(user.uid, courseId).then(setAllowed)
-    getCourse(courseId).then(setCourse)
+    isEnrolled(user.uid, courseId).then(setAllowed).catch(() => setAllowed(false))
+    getCourse(courseId).then(setCourse).catch(() => setCourse(null))
     getProgress(user.uid, courseId).then(p => {
-      setCompletedIds(p.completedLessonIds)
-      setWatchTime(p.watchTime || {})
-    })
+      setCompletedIds(p?.completedLessonIds || [])
+      setWatchTime(p?.watchTime || {})
+    }).catch(() => {})
   }, [user, courseId])
 
   useEffect(() => {

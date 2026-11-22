@@ -1,10 +1,12 @@
 rules_version = '2';
-// Rules needed for the admin student-management features and certificates.
+// Rules needed for student learning, creator course management, and admin features.
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
     function isAdmin() {
-      return signedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      return signedIn() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') == 'admin';
     }
     function notRemoved() {
       return !exists(/databases/$(database)/documents/users/$(request.auth.uid))
@@ -12,13 +14,14 @@ service cloud.firestore {
     }
 
     match /courses/{id} {
-      allow read: if resource.data.published == true || isAdmin();
+      allow read: if resource.data.published == true || isAdmin() || (signedIn() && exists(/databases/$(database)/documents/enrollments/$(request.auth.uid + '_' + id)));
       allow write: if isAdmin();
     }
     match /users/{uid} {
       allow read: if (signedIn() && request.auth.uid == uid) || isAdmin();
-      // Students may create/update their own profile but never change role/removed.
-      allow create: if signedIn() && request.auth.uid == uid && request.resource.data.role == 'student';
+      // Users may create their own profile when signing up.
+      allow create: if signedIn() && request.auth.uid == uid;
+      // Students may update their own profile but never alter their role or removed state.
       allow update: if isAdmin() || (signedIn() && request.auth.uid == uid
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'removed']));
       allow delete: if isAdmin();
@@ -34,9 +37,9 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
     match /pendingEnrollments/{id} {
-      allow read: if isAdmin() || (signedIn() && resource.data.email == request.auth.token.email);
+      allow read: if isAdmin() || (signedIn() && (resource.data.email == request.auth.token.email || resource.data.email == request.auth.token.email.lower()));
       allow create, update: if isAdmin();
-      allow delete: if isAdmin() || (signedIn() && resource.data.email == request.auth.token.email);
+      allow delete: if isAdmin() || (signedIn() && (resource.data.email == request.auth.token.email || resource.data.email == request.auth.token.email.lower()));
     }
     match /orders/{id} {
       allow create: if true;

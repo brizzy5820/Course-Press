@@ -198,26 +198,27 @@ export default function Login() {
         const role = snap.data()?.role
         return navigate(role === 'admin' && !redirectCourse ? '/admin' : (redirectCourse ? `/dashboard/${redirectCourse}` : '/dashboard'), { replace: true })
       } catch (err) {
-        if (err.code === 'auth/too-many-requests')
+        if (err.code === 'auth/too-many-requests') {
           return fail('Too many attempts. Please wait a few minutes and try again.', ERROR_CODES.tooManyRequests)
-        if (err.code === 'auth/wrong-password') {
+        }
+        if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential' || err.code === 'auth/invalid-login-credentials') {
           wrongPasswordSeen = true
           signInError = signInError || err
           continue
         }
-        if (['auth/user-not-found', 'auth/invalid-credential', 'auth/invalid-email'].includes(err.code)) {
+        if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-email') {
           signInError = signInError || err
           continue
         }
-        throw err
+        return fail(err.message || 'Sign-in failed. Check your details and try again.', ERROR_CODES.signInFailed)
       }
     }
 
     if (wrongPasswordSeen) {
-      return fail('Incorrect phone number. Use "Forgot password" if you need to reset it.', ERROR_CODES.wrongPassword)
+      return fail('Incorrect password or phone number. Use "Forgot password" if you need to reset it.', ERROR_CODES.wrongPassword)
     }
 
-    const isNotFound = signInError && ['auth/user-not-found', 'auth/invalid-credential', 'auth/invalid-email'].includes(signInError.code)
+    const isNotFound = signInError && signInError.code === 'auth/user-not-found'
     if (isNotFound) {
       try {
         const cred = await createUserWithEmailAndPassword(auth, em, digitOnlyPhone)
@@ -231,7 +232,7 @@ export default function Login() {
         if (createErr.code === 'auth/weak-password')
           return fail('Phone number is too weak to use as a password. Enter a valid phone number.', ERROR_CODES.weakPhonePassword)
 
-        return fail('Sign-in failed. Check your details and try again.', ERROR_CODES.signInFailed)
+        return fail(createErr.message || 'Sign-in failed. Check your details and try again.', ERROR_CODES.signInFailed)
       }
     }
 

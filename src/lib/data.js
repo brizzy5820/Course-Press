@@ -1,6 +1,6 @@
 import {
   collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc,
-  query, where, serverTimestamp, arrayUnion, arrayRemove,
+  query, where, serverTimestamp, arrayUnion, arrayRemove, onSnapshot,
 } from 'firebase/firestore'
 import { db } from '../firebase'
 
@@ -10,15 +10,60 @@ export const normalizeEmail = (email) => String(email || '').trim().toLowerCase(
 // ---------- Courses ----------
 
 export async function listCourses({ onlyPublished = true } = {}) {
-  const snap = await getDocs(collection(db, 'courses'))
-  let courses = snap.docs.map(d => ({ id: d.id, ...d.data() }))
-  if (onlyPublished) courses = courses.filter(c => c.published)
-  return courses
+  try {
+    const coll = collection(db, 'courses')
+    const q = onlyPublished ? query(coll, where('published', '==', true)) : coll
+    const snap = await getDocs(q)
+    let courses = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+    if (onlyPublished) courses = courses.filter(c => c.published)
+    return courses
+  } catch (err) {
+    if (err?.code === 'permission-denied') {
+      console.warn('[listCourses] Permission denied, returning empty list:', err.message)
+      return []
+    }
+    throw err
+  }
 }
 
 export async function getCourse(courseId) {
-  const snap = await getDoc(doc(db, 'courses', courseId))
-  return snap.exists() ? { id: snap.id, ...snap.data() } : null
+  if (!courseId) return null
+  try {
+    const snap = await getDoc(doc(db, 'courses', courseId))
+    return snap.exists() ? { id: snap.id, ...snap.data() } : null
+  } catch (err) {
+    if (err?.code === 'permission-denied') {
+      console.warn(`[getCourse] Permission denied for course ${courseId}:`, err.message)
+      return null
+    }
+    throw err
+  }
+}
+
+/**
+ * Real-time subscription to a course document.
+ * Enables instant multi-device synchronization for creators in the course editor.
+ */
+export function subscribeCourse(courseId, callback, onError) {
+  return onSnapshot(
+    doc(db, 'courses', courseId),
+    { includeMetadataChanges: true },
+    (snap) => {
+      if (snap.exists()) {
+        callback({
+          id: snap.id,
+          ...snap.data(),
+          _hasPendingWrites: snap.metadata.hasPendingWrites,
+        })
+      } else {
+        callback(null)
+      }
+    },
+    (err) => {
+      if (onError) onError(err)
+      else console.warn(`[subscribeCourse] Error for course ${courseId}:`, err)
+    }
+  )
 }
 
 export async function createCourse(course) {
@@ -91,15 +136,29 @@ export async function getUserProfile(uid) {
 function enrollmentId(uid, courseId) { return `${uid}_${courseId}` }
 
 export async function isEnrolled(uid, courseId) {
-  if (!uid) return false
-  const snap = await getDoc(doc(db, 'enrollments', enrollmentId(uid, courseId)))
-  return snap.exists()
+  if (!uid || !courseId) return false
+  try {
+    const snap = await getDoc(doc(db, 'enrollments', enrollmentId(uid, courseId)))
+    return snap.exists()
+  } catch (err) {
+    if (err?.code === 'permission-denied') return false
+    throw err
+  }
 }
 
 export async function listMyEnrollments(uid) {
-  const q    = query(collection(db, 'enrollments'), where('uid', '==', uid))
-  const snap = await getDocs(q)
-  return snap.docs.map(d => d.data())
+  if (!uid) return []
+  try {
+    const q    = query(collection(db, 'enrollments'), where('uid', '==', uid))
+    const snap = await getDocs(q)
+    return snap.docs.map(d => d.data())
+  } catch (err) {
+    if (err?.code === 'permission-denied') {
+      console.warn(`[listMyEnrollments] Permission denied for ${uid}:`, err.message)
+      return []
+    }
+    throw err
+  }
 }
 
 export async function grantEnrollment({ uid, courseId, email, source = 'manual' }) {
@@ -113,8 +172,17 @@ export async function grantEnrollment({ uid, courseId, email, source = 'manual' 
 function progressId(uid, courseId) { return `${uid}_${courseId}` }
 
 export async function getProgress(uid, courseId) {
-  const snap = await getDoc(doc(db, 'progress', progressId(uid, courseId)))
-  return snap.exists() ? snap.data() : { completedLessonIds: [], watchTime: {} }
+  if (!uid || !courseId) return { completedLessonIds: [], watchTime: {} }
+  try {
+    const snap = await getDoc(doc(db, 'progress', progressId(uid, courseId)))
+    return snap.exists() ? snap.data() : { completedLessonIds: [], watchTime: {} }
+  } catch (err) {
+    if (err?.code === 'permission-denied') {
+      console.warn(`[getProgress] Permission denied for ${uid}/${courseId}:`, err.message)
+      return { completedLessonIds: [], watchTime: {} }
+    }
+    throw err
+  }
 }
 
 /**

@@ -3,8 +3,9 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import {
   Undo2, Redo2, Plus, Play, X, Check, Loader2,
   AlertTriangle, Send, CheckCircle2, GripVertical,
+  Cloud, Sparkles, Smartphone,
 } from 'lucide-react'
-import { getCourse, updateCourse } from '../../lib/data'
+import { getCourse, updateCourse, subscribeCourse } from '../../lib/data'
 import { useTheme } from '../../contexts/ThemeContext'
 import { useToast } from '../../contexts/ToastContext'
 import {
@@ -145,11 +146,19 @@ export default function CourseEditor() {
   const navigate = useNavigate()
   const isDark = theme === 'dark'
 
+  // Unique client/device session identifier
+  const clientId = useRef(
+    typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : 'dev_' + Math.random().toString(36).slice(2, 9) + '_' + Date.now()
+  )
+
   const [course,          setCourse]          = useState(null)
   const [saving,          setSaving]          = useState(false)
   const [publishing,      setPublishing]      = useState(false)
   const [savedAt,         setSavedAt]         = useState(null)
   const [hasUnpublished,  setHasUnpublished]  = useState(false)
+  const [syncNotice,      setSyncNotice]      = useState('')   // subtle cross-device notification
   const [uploading,       setUploading]       = useState('')   // '' | 'cover' | 'resource' | 'audio'
   const [uploadErr,       setUploadErr]       = useState('')
 
@@ -170,10 +179,13 @@ export default function CourseEditor() {
   const activeGripRef                   = useRef(null)   // id of module or lesson whose handle is being grabbed
 
   // ── Auto-save & Local Draft refs ──────────────────────────────────────────
-  const courseRef          = useRef(null)
-  const autoSaveTimer      = useRef(null)
-  const hasUnpublishedRef  = useRef(false)
-  const savingRef          = useRef(false)
+  const courseRef             = useRef(null)
+  const autoSaveTimer         = useRef(null)
+  const hasUnpublishedRef     = useRef(false)
+  const savingRef             = useRef(false)
+  const lastLocalSaveTimeRef  = useRef(0)
+  const lastRemoteSavedAtRef  = useRef(0)
+  const isInitialLoadRef      = useRef(true)
 
   // Keep courseRef updated
   useEffect(() => {
@@ -203,50 +215,6 @@ export default function CourseEditor() {
       .finally(() => setYtLoading(false))
   }, [])
 
-  // ── Load Course & restore draft if newer ───────────────────────────────────
-  useEffect(() => {
-    // Check for any post-reload or post-navigation toast notifications
-    try {
-      const pending = sessionStorage.getItem('cp_post_route_toast')
-      if (pending) {
-        sessionStorage.removeItem('cp_post_route_toast')
-        const { message, type } = JSON.parse(pending)
-        toast(message, type || 'info')
-      }
-    } catch {}
-
-    let isMounted = true
-    getCourse(courseId).then(remoteCourse => {
-      if (!isMounted || !remoteCourse) return
-      let initialData = { ...remoteCourse }
-      let isUnpublished = !!remoteCourse.hasUnpublishedChanges
-
-      // If remote course has a draft stored in Firestore, use it as working state
-      if (remoteCourse.draft) {
-        initialData = { ...remoteCourse, ...remoteCourse.draft }
-        isUnpublished = true
-      }
-
-      // If localStorage has an even newer unsaved draft, restore it
-      try {
-        const draftRaw = localStorage.getItem(`cp_draft_${courseId}`)
-        if (draftRaw) {
-          const localDraft = JSON.parse(draftRaw)
-          if (localDraft && localDraft.title !== undefined) {
-            initialData = { ...initialData, ...localDraft }
-            isUnpublished = true
-          }
-        }
-      } catch {}
-
-      setCourse(initialData)
-      courseRef.current = initialData
-      setHasUnpublished(isUnpublished)
-      hasUnpublishedRef.current = isUnpublished
-    })
-    return () => { isMounted = false }
-  }, [courseId, toast])
-
   // ── Auto-save Draft to Firestore & LocalStorage (Never pushes to live students) ─
   const autoSaveDraft = useCallback(async () => {
     const current = courseRef.current
@@ -254,14 +222,18 @@ export default function CourseEditor() {
     savingRef.current = true
     setSaving(true)
     setUploadErr('')
+    const saveTime = Date.now()
+    lastLocalSaveTimeRef.current = saveTime
     try {
-      const { id, draft, hasUnpublishedChanges, draftSavedAt, lastPublishedAt, ...draftFields } = current
+      const { id, draft, hasUnpublishedChanges, draftSavedAt, draftDeviceId, lastPublishedAt, ...draftFields } = current
       await updateCourse(courseId, {
         draft: draftFields,
         hasUnpublishedChanges: true,
-        draftSavedAt: new Date().toISOString(),
+        draftSavedAt: saveTime,
+        draftDeviceId: clientId.current,
       })
-      setSavedAt(new Date())
+      lastRemoteSavedAtRef.current = saveTime
+      setSavedAt(new Date(saveTime))
       setHasUnpublished(true)
       hasUnpublishedRef.current = true
     } catch (err) {
@@ -280,7 +252,7 @@ export default function CourseEditor() {
     setPublishing(true)
     setUploadErr('')
     try {
-      const { id, draft, hasUnpublishedChanges, draftSavedAt, ...liveData } = current
+      const { id, draft, hasUnpublishedChanges, draftSavedAt, draftDeviceId, ...liveData } = current
       await updateCourse(courseId, {
         ...liveData,
         draft: null,
@@ -310,8 +282,133 @@ export default function CourseEditor() {
     }
   }, [courseId, toast])
 
+  // ── Real-Time Cross-Device Course Sync ────────────────────────────────────
+  useEffect(() => {
+    // Check for any post-reload or post-navigation toast notifications
+    try {
+      const pending = sessionStorage.getItem('cp_post_route_toast')
+      if (pending) {
+        sessionStorage.removeItem('cp_post_route_toast')
+        const { message, type } = JSON.parse(pending)
+        toast(message, type || 'info')
+      }
+    } catch {}
+
+    const unsubscribe = subscribeCourse(
+      courseId,
+      (remoteCourse) => {
+        if (!remoteCourse) return
+
+        const remoteDraftSavedAt = typeof remoteCourse.draftSavedAt === 'string'
+          ? new Date(remoteCourse.draftSavedAt).getTime()
+          : (Number(remoteCourse.draftSavedAt) || 0)
+
+        // 1. Initial Load: prioritize cloud draft so work done on other devices loads immediately
+        if (isInitialLoadRef.current) {
+          isInitialLoadRef.current = false
+          let initialData = { ...remoteCourse }
+          let isUnpublished = !!remoteCourse.hasUnpublishedChanges
+
+          if (remoteCourse.draft) {
+            initialData = { ...remoteCourse, ...remoteCourse.draft }
+            isUnpublished = true
+            lastRemoteSavedAtRef.current = remoteDraftSavedAt
+          }
+
+          // Check if device-local storage has an unsaved offline draft
+          try {
+            const draftRaw = localStorage.getItem(`cp_draft_${courseId}`)
+            if (draftRaw) {
+              const localDraft = JSON.parse(draftRaw)
+              const localDraftTime = Number(localDraft?._draftSavedAt) || 0
+              if (localDraft && localDraft.title !== undefined) {
+                // Cloud draft wins unless local draft is strictly newer (e.g. offline edits)
+                if (!remoteCourse.draft || localDraftTime > remoteDraftSavedAt) {
+                  initialData = { ...initialData, ...localDraft }
+                  isUnpublished = true
+                  if (localDraftTime > remoteDraftSavedAt) {
+                    setTimeout(() => autoSaveDraft(), 1000)
+                  }
+                }
+              }
+            }
+          } catch {}
+
+          setCourse(initialData)
+          courseRef.current = initialData
+          setHasUnpublished(isUnpublished)
+          hasUnpublishedRef.current = isUnpublished
+          return
+        }
+
+        // 2. Real-Time incoming updates while editor is open:
+
+        // Check if write originated from THIS device or is a pending local write
+        if (remoteCourse.draftDeviceId === clientId.current || remoteCourse._hasPendingWrites) {
+          if (remoteDraftSavedAt > lastRemoteSavedAtRef.current) {
+            lastRemoteSavedAtRef.current = remoteDraftSavedAt
+          }
+          return
+        }
+
+        // Case A: Another device updated the draft in real time!
+        if (remoteCourse.draft && remoteDraftSavedAt > lastRemoteSavedAtRef.current) {
+          // If we have newer unsaved local edits, don't overwrite
+          if (lastLocalSaveTimeRef.current > remoteDraftSavedAt) {
+            return
+          }
+
+          lastRemoteSavedAtRef.current = remoteDraftSavedAt
+          const merged = { ...remoteCourse, ...remoteCourse.draft }
+          setCourse(merged)
+          courseRef.current = merged
+          setHasUnpublished(true)
+          hasUnpublishedRef.current = true
+          setSavedAt(new Date(remoteDraftSavedAt))
+
+          try {
+            localStorage.setItem(`cp_draft_${courseId}`, JSON.stringify({
+              ...remoteCourse.draft,
+              _draftSavedAt: remoteDraftSavedAt,
+              _draftDeviceId: remoteCourse.draftDeviceId || 'other_device',
+            }))
+          } catch {}
+
+          setSyncNotice('Changes from your other device synced in real time')
+          setTimeout(() => setSyncNotice(''), 4500)
+          return
+        }
+
+        // Case B: Another device published the course live for students
+        if (!remoteCourse.hasUnpublishedChanges && !remoteCourse.draft) {
+          lastRemoteSavedAtRef.current = remoteDraftSavedAt
+          setCourse(remoteCourse)
+          courseRef.current = remoteCourse
+          setHasUnpublished(false)
+          hasUnpublishedRef.current = false
+          setSavedAt(new Date())
+
+          try {
+            localStorage.removeItem(`cp_draft_${courseId}`)
+          } catch {}
+
+          setSyncNotice('Course published for students from another device')
+          setTimeout(() => setSyncNotice(''), 4500)
+          return
+        }
+      },
+      (err) => {
+        console.error('Real-time course sync subscription error:', err)
+      }
+    )
+
+    return () => {
+      unsubscribe()
+    }
+  }, [courseId, autoSaveDraft, toast])
+
   // ── Mutate course state with Undo tracking & debounced Auto-save ──────────
-  const set = useCallback((patch, recordHistory = true) => {
+  const set = useCallback((patch, recordHistory = true, immediate = false) => {
     setCourse(prev => {
       if (!prev) return prev
       const next = typeof patch === 'function' ? patch(prev) : { ...prev, ...patch }
@@ -324,20 +421,55 @@ export default function CourseEditor() {
       hasUnpublishedRef.current = true
       courseRef.current = next
 
+      const now = Date.now()
+      lastLocalSaveTimeRef.current = now
+
       try {
-        const { id, draft, hasUnpublishedChanges, draftSavedAt, lastPublishedAt, ...draftFields } = next
-        localStorage.setItem(`cp_draft_${courseId}`, JSON.stringify(draftFields))
+        const { id, draft, hasUnpublishedChanges, draftSavedAt, draftDeviceId, lastPublishedAt, ...draftFields } = next
+        localStorage.setItem(`cp_draft_${courseId}`, JSON.stringify({
+          ...draftFields,
+          _draftSavedAt: now,
+          _draftDeviceId: clientId.current,
+        }))
       } catch {}
 
-      // Debounce auto-save by 1600ms
       if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
       autoSaveTimer.current = setTimeout(() => {
         autoSaveDraft()
-      }, 1600)
+      }, immediate ? 250 : 1200)
 
       return next
     })
   }, [courseId, autoSaveDraft])
+
+  // ── Auto-save immediately when user switches tabs or apps (e.g. mobile to laptop) ─
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden' && hasUnpublishedRef.current) {
+        if (autoSaveTimer.current) {
+          clearTimeout(autoSaveTimer.current)
+          autoSaveTimer.current = null
+        }
+        autoSaveDraft()
+      }
+    }
+    const handleWindowBlur = () => {
+      if (hasUnpublishedRef.current) {
+        if (autoSaveTimer.current) {
+          clearTimeout(autoSaveTimer.current)
+          autoSaveTimer.current = null
+        }
+        autoSaveDraft()
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('blur', handleWindowBlur)
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('blur', handleWindowBlur)
+    }
+  }, [autoSaveDraft])
 
   // ── Undo & Redo ────────────────────────────────────────────────────────────
   const undo = useCallback(() => {
@@ -352,13 +484,20 @@ export default function CourseEditor() {
       setHasUnpublished(true)
       hasUnpublishedRef.current = true
 
+      const now = Date.now()
+      lastLocalSaveTimeRef.current = now
+
       try {
-        const { id, draft, hasUnpublishedChanges, draftSavedAt, lastPublishedAt, ...draftFields } = previous
-        localStorage.setItem(`cp_draft_${courseId}`, JSON.stringify(draftFields))
+        const { id, draft, hasUnpublishedChanges, draftSavedAt, draftDeviceId, lastPublishedAt, ...draftFields } = previous
+        localStorage.setItem(`cp_draft_${courseId}`, JSON.stringify({
+          ...draftFields,
+          _draftSavedAt: now,
+          _draftDeviceId: clientId.current,
+        }))
       } catch {}
 
       if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
-      autoSaveTimer.current = setTimeout(() => autoSaveDraft(), 1600)
+      autoSaveTimer.current = setTimeout(() => autoSaveDraft(), 250)
 
       return newPast
     })
@@ -376,13 +515,20 @@ export default function CourseEditor() {
       setHasUnpublished(true)
       hasUnpublishedRef.current = true
 
+      const now = Date.now()
+      lastLocalSaveTimeRef.current = now
+
       try {
-        const { id, draft, hasUnpublishedChanges, draftSavedAt, lastPublishedAt, ...draftFields } = next
-        localStorage.setItem(`cp_draft_${courseId}`, JSON.stringify(draftFields))
+        const { id, draft, hasUnpublishedChanges, draftSavedAt, draftDeviceId, lastPublishedAt, ...draftFields } = next
+        localStorage.setItem(`cp_draft_${courseId}`, JSON.stringify({
+          ...draftFields,
+          _draftSavedAt: now,
+          _draftDeviceId: clientId.current,
+        }))
       } catch {}
 
       if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
-      autoSaveTimer.current = setTimeout(() => autoSaveDraft(), 1600)
+      autoSaveTimer.current = setTimeout(() => autoSaveDraft(), 250)
 
       return newFuture
     })
@@ -393,8 +539,12 @@ export default function CourseEditor() {
     const handleBeforeUnload = (e) => {
       if (hasUnpublishedRef.current && courseRef.current) {
         try {
-          const { id, draft, hasUnpublishedChanges, draftSavedAt, lastPublishedAt, ...draftFields } = courseRef.current
-          localStorage.setItem(`cp_draft_${courseId}`, JSON.stringify(draftFields))
+          const { id, draft, hasUnpublishedChanges, draftSavedAt, draftDeviceId, lastPublishedAt, ...draftFields } = courseRef.current
+          localStorage.setItem(`cp_draft_${courseId}`, JSON.stringify({
+            ...draftFields,
+            _draftSavedAt: Date.now(),
+            _draftDeviceId: clientId.current,
+          }))
         } catch {}
         e.preventDefault()
         e.returnValue = 'You have unsaved changes. Are you sure you want to leave?'
@@ -407,11 +557,12 @@ export default function CourseEditor() {
       window.removeEventListener('beforeunload', handleBeforeUnload)
       if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
       if (hasUnpublishedRef.current && courseRef.current) {
-        const { id, draft, hasUnpublishedChanges, draftSavedAt, lastPublishedAt, ...draftFields } = courseRef.current
+        const { id, draft, hasUnpublishedChanges, draftSavedAt, draftDeviceId, lastPublishedAt, ...draftFields } = courseRef.current
         updateCourse(courseId, {
           draft: draftFields,
           hasUnpublishedChanges: true,
-          draftSavedAt: new Date().toISOString(),
+          draftSavedAt: Date.now(),
+          draftDeviceId: clientId.current,
         }).catch(() => {})
       }
     }
@@ -468,16 +619,18 @@ export default function CourseEditor() {
   const handleExitDraft = () => {
     setExitPromptOpen(false)
     if (courseRef.current) {
-      const { id, draft, hasUnpublishedChanges, draftSavedAt, lastPublishedAt, ...draftFields } = courseRef.current
+      const { id, draft, hasUnpublishedChanges, draftSavedAt, draftDeviceId, lastPublishedAt, ...draftFields } = courseRef.current
+      const now = Date.now()
       updateCourse(courseId, {
         draft: draftFields,
         hasUnpublishedChanges: true,
-        draftSavedAt: new Date().toISOString(),
+        draftSavedAt: now,
+        draftDeviceId: clientId.current,
       }).catch(() => {})
     }
     try {
       sessionStorage.setItem('cp_post_route_toast', JSON.stringify({
-        message: 'Course draft saved automatically.',
+        message: 'Course draft saved automatically across your devices.',
         type: 'ok',
       }))
     } catch {}
@@ -575,13 +728,13 @@ export default function CourseEditor() {
 
   // ── Curriculum helpers ───────────────────────────────────────────────────
   function addModule() {
-    set({ curriculum: [...(course.curriculum || []), { id: uid(), title: 'New module', lessons: [] }] })
+    set({ curriculum: [...(course.curriculum || []), { id: uid(), title: 'New module', lessons: [] }] }, true, true)
   }
   function updateModule(modId, patch) {
     set({ curriculum: course.curriculum.map(m => m.id === modId ? { ...m, ...patch } : m) })
   }
   function removeModule(modId) {
-    set({ curriculum: course.curriculum.filter(m => m.id !== modId) })
+    set({ curriculum: course.curriculum.filter(m => m.id !== modId) }, true, true)
   }
   function confirmRemoveModule(mod) {
     const count = mod.lessons?.length || 0
@@ -609,7 +762,7 @@ export default function CourseEditor() {
           }],
         }
       ),
-    })
+    }, true, true)
   }
   function updateLesson(modId, lessonId, patch) {
     set({
@@ -626,7 +779,7 @@ export default function CourseEditor() {
       curriculum: course.curriculum.map(m =>
         m.id !== modId ? m : { ...m, lessons: m.lessons.filter(l => l.id !== lessonId) }
       ),
-    })
+    }, true, true)
   }
   function confirmRemoveLesson(modId, lesson) {
     setConfirmDialog({
@@ -681,7 +834,7 @@ export default function CourseEditor() {
 
     const newCurriculum = moveArrayItem(course.curriculum || [], fromIndex, targetIndex, position)
     if (newCurriculum !== course.curriculum) {
-      set({ curriculum: newCurriculum })
+      set({ curriculum: newCurriculum }, true, true)
       toast('Modules rearranged', 'info')
     }
   }
@@ -733,7 +886,7 @@ export default function CourseEditor() {
     }
 
     if (newCurriculum) {
-      set({ curriculum: newCurriculum })
+      set({ curriculum: newCurriculum }, true, true)
       toast('Lessons rearranged', 'info')
     }
   }
@@ -748,7 +901,7 @@ export default function CourseEditor() {
 
     const newCurriculum = appendLessonToModule(course.curriculum || [], fromModIndex, fromLessonIndex, targetModIndex)
     if (newCurriculum) {
-      set({ curriculum: newCurriculum })
+      set({ curriculum: newCurriculum }, true, true)
       toast('Lesson moved to module', 'info')
     }
   }
@@ -893,43 +1046,44 @@ export default function CourseEditor() {
     <div className={`min-h-screen pb-24 ${isDark ? 'bg-neutral-950 text-white' : 'bg-slate-50 text-slate-900'}`}>
 
       {/* Sticky header bar */}
-      <header className={`sticky top-0 z-30 ${isDark ? 'bg-neutral-900 border-neutral-800 shadow-none' : 'bg-white border-b border-slate-200 shadow-sm'}`}>
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-3 flex-wrap">
+      <header className={`sticky top-0 z-30 transition-colors ${isDark ? 'bg-neutral-900 border-neutral-800 shadow-none' : 'bg-white border-b border-slate-200 shadow-xs'}`}>
+        <div className="max-w-4xl mx-auto px-3 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between gap-2 sm:gap-3 flex-wrap">
           {/* Left: Back & Course Title */}
-          <div className="flex items-center gap-3 min-w-0">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <button
               type="button"
               onClick={handleBackClick}
-              className="text-xs sm:text-sm text-slate-500 hover:text-slate-800 dark:hover:text-white transition flex items-center gap-1 shrink-0"
+              className="text-xs sm:text-sm text-slate-500 hover:text-slate-800 dark:hover:text-white transition flex items-center gap-1 shrink-0 px-2 py-1 rounded-md hover:bg-slate-100 dark:hover:bg-neutral-800"
+              title="Back to all courses"
             >
               ← <span className="hidden sm:inline">All courses</span>
             </button>
             <span className="text-slate-300 dark:text-neutral-700 hidden sm:inline">|</span>
-            <span className="text-xs sm:text-sm font-semibold text-slate-800 dark:text-white truncate max-w-[120px] sm:max-w-xs">
+            <span className="text-xs sm:text-sm font-semibold text-slate-800 dark:text-white truncate max-w-[110px] xs:max-w-[140px] sm:max-w-xs" title={course?.title}>
               {course?.title || 'Untitled course'}
             </span>
           </div>
 
           {/* Center: Undo / Redo & Add Module Immediately */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2">
             <div className="flex items-center bg-slate-100 dark:bg-neutral-800 rounded-lg p-0.5 border border-slate-200 dark:border-neutral-700">
               <button
                 type="button"
                 onClick={undo}
                 disabled={past.length === 0}
                 title="Undo (Ctrl+Z)"
-                className="p-1.5 text-slate-600 dark:text-neutral-300 hover:text-slate-900 dark:hover:text-white hover:bg-white dark:hover:bg-neutral-700 rounded-md transition disabled:opacity-30 disabled:hover:bg-transparent"
+                className="p-1 sm:p-1.5 text-slate-600 dark:text-neutral-300 hover:text-slate-900 dark:hover:text-white hover:bg-white dark:hover:bg-neutral-700 rounded-md transition disabled:opacity-30 disabled:hover:bg-transparent"
               >
-                <Undo2 className="w-4 h-4" />
+                <Undo2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </button>
               <button
                 type="button"
                 onClick={redo}
                 disabled={future.length === 0}
                 title="Redo (Ctrl+Y)"
-                className="p-1.5 text-slate-600 dark:text-neutral-300 hover:text-slate-900 dark:hover:text-white hover:bg-white dark:hover:bg-neutral-700 rounded-md transition disabled:opacity-30 disabled:hover:bg-transparent"
+                className="p-1 sm:p-1.5 text-slate-600 dark:text-neutral-300 hover:text-slate-900 dark:hover:text-white hover:bg-white dark:hover:bg-neutral-700 rounded-md transition disabled:opacity-30 disabled:hover:bg-transparent"
               >
-                <Redo2 className="w-4 h-4" />
+                <Redo2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </button>
             </div>
 
@@ -937,51 +1091,61 @@ export default function CourseEditor() {
               type="button"
               onClick={addModule}
               title="Create a new module immediately"
-              className="flex items-center gap-1.5 text-xs font-semibold bg-amber-500/10 text-amber-700 dark:text-amber-400 hover:bg-amber-500/20 border border-amber-500/30 rounded-lg px-3 py-1.5 transition shrink-0"
+              className="flex items-center gap-1 sm:gap-1.5 text-xs font-semibold bg-amber-500/10 text-amber-700 dark:text-amber-400 hover:bg-amber-500/20 border border-amber-500/30 rounded-lg px-2 sm:px-3 py-1.5 transition shrink-0"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span>New module</span>
+              <span className="hidden xs:inline sm:inline">New module</span>
+              <span className="inline xs:hidden sm:hidden">Module</span>
             </button>
           </div>
 
-          {/* Right: Auto-save status indicator & Save button */}
-          <div className="flex items-center gap-3">
+          {/* Right: Real-time cloud sync status indicator & Save button */}
+          <div className="flex items-center gap-2 sm:gap-3">
             {uploading && (
-              <span className="text-xs text-amber-600 font-medium animate-pulse flex items-center gap-1">
+              <span className="text-[11px] sm:text-xs text-amber-600 font-medium animate-pulse flex items-center gap-1">
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                {uploading === 'cover' ? 'Cover…' : uploading === 'audio' ? 'Audio…' : 'File…'}
+                <span className="hidden sm:inline">{uploading === 'cover' ? 'Cover…' : uploading === 'audio' ? 'Audio…' : 'File…'}</span>
               </span>
             )}
             {Object.values(videoUploads).some(u => u.status === 'uploading') && (
-              <span className="text-xs text-blue-600 font-medium animate-pulse flex items-center gap-1">
+              <span className="text-[11px] sm:text-xs text-blue-600 font-medium animate-pulse flex items-center gap-1">
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                YouTube…
+                <span className="hidden sm:inline">YouTube…</span>
               </span>
             )}
             {uploadErr && (
-              <span className="text-xs text-red-600 max-w-xs truncate" title={uploadErr}>{uploadErr}</span>
+              <span className="text-xs text-red-600 max-w-[100px] sm:max-w-xs truncate" title={uploadErr}>{uploadErr}</span>
             )}
+
             {saving ? (
-              <span className="text-xs text-amber-600 font-medium flex items-center gap-1">
+              <span className="text-[11px] sm:text-xs text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1" title="Saving changes across your devices">
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                Saving draft…
+                <span className="hidden md:inline">Syncing…</span>
               </span>
             ) : hasUnpublished ? (
-              <span className="text-xs text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1.5" title="Auto-saved as draft. Click 'Save for students' to publish live.">
-                <span className="w-2 h-2 rounded-full bg-amber-500 " />
-              
+              <span
+                className="text-[11px] sm:text-xs text-amber-700 dark:text-amber-400 font-medium flex items-center gap-1.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-md px-2 py-0.5"
+                title="Draft saved across all your devices in real time. Click 'Save for students' to publish live."
+              >
+                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse shrink-0" />
+                <Cloud className="w-3 h-3 text-amber-600 dark:text-amber-400 hidden xs:inline shrink-0" />
+                <span>Draft</span>
               </span>
-            ) : savedAt && !uploading && (
-              <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1" title="All changes are published live for students">
-                <Check className="w-3.5 h-3.5" />
-                Live 
+            ) : (
+              <span
+                className="text-[11px] sm:text-xs text-emerald-700 dark:text-emerald-400 font-medium flex items-center gap-1 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-md px-2 py-0.5"
+                title="All changes are published live for students across all devices"
+              >
+                <Check className="w-3 h-3 text-emerald-600 shrink-0" />
+                <span>Live</span>
               </span>
             )}
+
             <button
               type="button"
               onClick={() => publishForStudents({ showNotification: true })}
               disabled={publishing || saving || !!uploading || !hasUnpublished}
-              className={`flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition shrink-0
+              className={`flex items-center gap-1 sm:gap-1.5 rounded-lg px-2.5 sm:px-3.5 py-1.5 text-xs font-semibold transition shrink-0
                 ${hasUnpublished
                   ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-sm ring-1 ring-amber-500/50'
                   : 'bg-slate-200 dark:bg-neutral-800 text-slate-500 dark:text-neutral-400 cursor-default'}`}
@@ -990,17 +1154,19 @@ export default function CourseEditor() {
               {publishing ? (
                 <>
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  Publishing…
+                  <span>Publishing…</span>
                 </>
               ) : hasUnpublished ? (
                 <>
                   <Send className="w-3.5 h-3.5" />
-                  Save 
+                  <span className="hidden sm:inline">Save for students</span>
+                  <span className="inline sm:hidden">Save</span>
                 </>
               ) : (
                 <>
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-                  Saved for students
+                  <span className="hidden sm:inline">Saved for students</span>
+                  <span className="inline sm:hidden">Saved</span>
                 </>
               )}
             </button>
@@ -1008,11 +1174,27 @@ export default function CourseEditor() {
         </div>
       </header>
 
+      {/* Real-time cross-device sync alert banner */}
+      {syncNotice && (
+        <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-amber-600 text-white text-xs font-medium py-2 px-4 shadow-md flex items-center justify-center gap-2 animate-fadeIn sticky top-[49px] sm:top-[53px] z-20">
+          <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-spin shrink-0" />
+          <span>{syncNotice}</span>
+          <button
+            type="button"
+            onClick={() => setSyncNotice('')}
+            className="ml-2 text-white/80 hover:text-white p-0.5 rounded hover:bg-white/10"
+            title="Dismiss"
+          >
+            <X className="w-3 h-3" />
+          </button>
+        </div>
+      )}
+
       <main className="max-w-3xl mx-auto px-6 py-8 space-y-8">
 
         {/* ── Course details ── */}
-        <section className="bg-white rounded-xl border border-slate-200 p-6 space-y-4">
-          <h2 className="font-semibold text-slate-900">Course details</h2>
+        <section className="bg-white dark:bg-neutral-900 rounded-xl border border-slate-200 dark:border-neutral-800 p-4 sm:p-6 space-y-4 shadow-xs">
+          <h2 className="font-semibold text-slate-900 dark:text-white">Course details</h2>
 
           <Field label="Title">
             <input value={course.title} onChange={e => set({ title: e.target.value })} className="editor-input" />
@@ -1033,7 +1215,7 @@ export default function CourseEditor() {
                 accept="image/*"
                 onChange={handleCoverUpload}
                 disabled={!!uploading}
-                className="text-sm text-slate-500 file:mr-3 file:text-xs file:font-medium file:bg-slate-100 dark:file:bg-slate-700 file:border-0 file:rounded file:px-3 file:py-1.5 file:cursor-pointer disabled:opacity-50"
+                className="text-sm text-slate-500 file:mr-3 file:text-xs file:font-medium file:bg-slate-100 dark:file:bg-neutral-800 dark:file:text-neutral-200 file:border-0 file:rounded file:px-3 file:py-1.5 file:cursor-pointer disabled:opacity-50"
               />
             </Field>
           </div>
@@ -1046,26 +1228,26 @@ export default function CourseEditor() {
         </section>
 
         {/* ── YouTube Connection ── */}
-        <section className="bg-white rounded-xl border border-slate-200 p-5">
+        <section className="bg-white dark:bg-neutral-900 rounded-xl border border-slate-200 dark:border-neutral-800 p-4 sm:p-5">
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div className="flex items-center gap-3">
               {/* YouTube icon */}
-              <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${ytConnected ? 'bg-red-500/10' : 'bg-slate-100'}`}>
-                <svg className={`w-5 h-5 ${ytConnected ? 'text-red-600' : 'text-slate-400'}`} viewBox="0 0 24 24" fill="currentColor">
+              <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${ytConnected ? 'bg-red-500/10' : 'bg-slate-100 dark:bg-neutral-800'}`}>
+                <svg className={`w-5 h-5 ${ytConnected ? 'text-red-600' : 'text-slate-400 dark:text-neutral-500'}`} viewBox="0 0 24 24" fill="currentColor">
                   <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
                 </svg>
               </div>
               <div>
-                <p className="text-sm font-semibold text-slate-800">
+                <p className="text-sm font-semibold text-slate-800 dark:text-white">
                   {ytLoading ? 'Checking YouTube…' : ytConnected ? 'YouTube Connected' : 'YouTube Upload'}
                 </p>
                 {ytConnected ? (
-                  <p className="text-xs text-slate-500">
-                    Channel: <span className="font-medium text-slate-700">{ytChannel.title}</span>
-                    <span className="text-slate-400"> · Videos upload as Unlisted · Not made for kids</span>
+                  <p className="text-xs text-slate-500 dark:text-neutral-400">
+                    Channel: <span className="font-medium text-slate-700 dark:text-neutral-200">{ytChannel.title}</span>
+                    <span className="text-slate-400 dark:text-neutral-500"> · Videos upload as Unlisted · Not made for kids</span>
                   </p>
                 ) : (
-                  <p className="text-xs text-slate-500">
+                  <p className="text-xs text-slate-500 dark:text-neutral-400">
                     Connect your YouTube channel to upload videos directly from here
                   </p>
                 )}
@@ -1075,7 +1257,7 @@ export default function CourseEditor() {
               {ytConnected ? (
                 <button
                   onClick={handleDisconnectYouTube}
-                  className="text-xs font-medium text-red-500 hover:text-red-700 border border-red-200 rounded-lg px-3 py-1.5 hover:bg-red-50 transition"
+                  className="text-xs font-medium text-red-500 hover:text-red-700 border border-red-200 dark:border-red-900/60 rounded-lg px-3 py-1.5 hover:bg-red-50 dark:hover:bg-red-950/40 transition"
                 >
                   Disconnect
                 </button>
@@ -1111,7 +1293,7 @@ export default function CourseEditor() {
         <section>
           <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
             <div className="flex items-center gap-2.5">
-              <h2 className="font-semibold text-slate-900">Curriculum</h2>
+              <h2 className="font-semibold text-slate-900 dark:text-white">Curriculum</h2>
               <span className="text-[11px] text-slate-500 dark:text-neutral-400 bg-slate-100 dark:bg-neutral-800 px-2 py-0.5 rounded-full font-medium flex items-center gap-1 border border-slate-200 dark:border-neutral-700">
                 <GripVertical className="w-3 h-3 text-slate-400" />
                 Drag to rearrange
@@ -1146,30 +1328,32 @@ export default function CourseEditor() {
                   onDragOver={(e) => handleModuleDragOver(e, mi)}
                   onDrop={(e) => handleModuleDrop(e, mi)}
                   onDragEnd={handleDragEnd}
-                  className={`bg-white rounded-xl border border-slate-200 overflow-hidden transition-all duration-200 ${
+                  className={`bg-white dark:bg-neutral-900 rounded-xl border border-slate-200 dark:border-neutral-800 overflow-hidden transition-all duration-200 ${
                     dragItem?.type === 'module' && dragItem.id === mod.id
                       ? 'opacity-35 scale-[0.99] border-dashed border-amber-400 shadow-inner'
                       : ''
                   }`}
                 >
                   {/* Module header */}
-                  <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 bg-slate-50 border-b border-slate-200">
+                  <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 bg-slate-50 dark:bg-neutral-850 border-b border-slate-200 dark:border-neutral-800">
                     <div
                       onMouseDown={() => { activeGripRef.current = mod.id }}
                       onMouseUp={() => { activeGripRef.current = null }}
-                      className="cursor-grab active:cursor-grabbing p-1 -ml-1 text-slate-400 hover:text-slate-800 dark:hover:text-white hover:bg-slate-200/70 rounded transition shrink-0"
+                      onTouchStart={() => { activeGripRef.current = mod.id }}
+                      onTouchEnd={() => { activeGripRef.current = null }}
+                      className="cursor-grab active:cursor-grabbing p-1 -ml-1 text-slate-400 hover:text-slate-800 dark:hover:text-white hover:bg-slate-200/70 dark:hover:bg-neutral-700/70 rounded transition shrink-0 touch-none"
                       title="Drag to rearrange module position"
                     >
                       <GripVertical className="w-4 h-4" />
                     </div>
 
-                    <span className="font-mono text-xs text-slate-500 font-semibold shrink-0 bg-slate-200/80 px-1.5 py-0.5 rounded">
+                    <span className="font-mono text-xs text-slate-500 dark:text-neutral-400 font-semibold shrink-0 bg-slate-200/80 dark:bg-neutral-800 px-1.5 py-0.5 rounded">
                       M{mi + 1}
                     </span>
                     <input
                       value={mod.title}
                       onChange={e => updateModule(mod.id, { title: e.target.value })}
-                      className="flex-1 bg-transparent text-sm font-semibold text-slate-800 focus:outline-none"
+                      className="flex-1 bg-transparent text-sm font-semibold text-slate-800 dark:text-neutral-100 focus:outline-none"
                       placeholder="Module title…"
                     />
                     <button
@@ -1245,7 +1429,7 @@ export default function CourseEditor() {
                             e.stopPropagation()
                             handleDragEnd()
                           }}
-                          className={`border border-slate-200 rounded-lg p-3 space-y-2.5 bg-slate-50/50 transition-all duration-200 ${
+                          className={`border border-slate-200 dark:border-neutral-800 rounded-lg p-3 space-y-2.5 bg-slate-50/50 dark:bg-neutral-800/40 transition-all duration-200 ${
                             dragItem?.type === 'lesson' && dragItem.id === lesson.id
                               ? 'opacity-35 scale-[0.99] border-dashed border-blue-400 bg-blue-50/40 shadow-inner'
                               : ''
@@ -1256,19 +1440,21 @@ export default function CourseEditor() {
                             <div
                               onMouseDown={() => { activeGripRef.current = lesson.id }}
                               onMouseUp={() => { activeGripRef.current = null }}
-                              className="cursor-grab active:cursor-grabbing p-1 -ml-1 text-slate-400 hover:text-slate-800 dark:hover:text-white hover:bg-slate-200/70 rounded transition shrink-0"
+                              onTouchStart={() => { activeGripRef.current = lesson.id }}
+                              onTouchEnd={() => { activeGripRef.current = null }}
+                              className="cursor-grab active:cursor-grabbing p-1 -ml-1 text-slate-400 hover:text-slate-800 dark:hover:text-white hover:bg-slate-200/70 dark:hover:bg-neutral-700/70 rounded transition shrink-0 touch-none"
                               title="Drag to rearrange lesson position"
                             >
                               <GripVertical className="w-3.5 h-3.5" />
                             </div>
 
-                            <span className="font-mono text-xs text-slate-500 font-semibold shrink-0 bg-white border border-slate-200 px-1.5 py-0.5 rounded shadow-2xs">
+                            <span className="font-mono text-xs text-slate-500 dark:text-neutral-400 font-semibold shrink-0 bg-white dark:bg-neutral-800 border border-slate-200 dark:border-neutral-700 px-1.5 py-0.5 rounded shadow-2xs">
                               {mi + 1}.{li + 1}
                             </span>
                             <input
                               value={lesson.title}
                               onChange={e => updateLesson(mod.id, lesson.id, { title: e.target.value })}
-                              className="flex-1 text-sm font-medium text-slate-800 focus:outline-none bg-transparent border-b border-transparent focus:border-slate-300 pb-0.5"
+                              className="flex-1 text-sm font-medium text-slate-800 dark:text-neutral-100 focus:outline-none bg-transparent border-b border-transparent focus:border-slate-300 dark:focus:border-neutral-600 pb-0.5"
                               placeholder="Lesson title…"
                             />
                             <span className={`text-[10px] font-mono px-2 py-0.5 rounded font-medium shrink-0
@@ -1765,13 +1951,32 @@ export default function CourseEditor() {
           border: 1px solid #e2e8f0;
           border-radius: 0.5rem;
           padding: 0.625rem 0.875rem;
-          font-size: 0.875rem;
+          font-size: 0.9375rem;
           background: #f8fafc;
           color: #0f172a;
           outline: none;
-          transition: border-color 0.15s, background 0.15s;
+          transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
         }
-        .editor-input:focus { border-color: #c97f1e; background: #fff; }
+        .editor-input:focus {
+          border-color: #c97f1e;
+          background: #fff;
+          box-shadow: 0 0 0 2px rgba(201, 127, 30, 0.15);
+        }
+        .dark .editor-input {
+          border-color: #334155;
+          background: #1e293b;
+          color: #f8fafc;
+        }
+        .dark .editor-input:focus {
+          border-color: #f59e0b;
+          background: #0f172a;
+          box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2);
+        }
+        @media (max-width: 640px) {
+          .editor-input {
+            font-size: 1rem;
+          }
+        }
       `}</style>
     </div>
   )
