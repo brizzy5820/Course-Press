@@ -205,6 +205,16 @@ export default function CourseEditor() {
 
   // ── Load Course & restore draft if newer ───────────────────────────────────
   useEffect(() => {
+    // Check for any post-reload or post-navigation toast notifications
+    try {
+      const pending = sessionStorage.getItem('cp_post_route_toast')
+      if (pending) {
+        sessionStorage.removeItem('cp_post_route_toast')
+        const { message, type } = JSON.parse(pending)
+        toast(message, type || 'info')
+      }
+    } catch {}
+
     let isMounted = true
     getCourse(courseId).then(remoteCourse => {
       if (!isMounted || !remoteCourse) return
@@ -235,7 +245,7 @@ export default function CourseEditor() {
       hasUnpublishedRef.current = isUnpublished
     })
     return () => { isMounted = false }
-  }, [courseId])
+  }, [courseId, toast])
 
   // ── Auto-save Draft to Firestore & LocalStorage (Never pushes to live students) ─
   const autoSaveDraft = useCallback(async () => {
@@ -380,12 +390,15 @@ export default function CourseEditor() {
 
   // ── Auto-save on exit, page close or component unmount ─────────────────────
   useEffect(() => {
-    const handleBeforeUnload = () => {
+    const handleBeforeUnload = (e) => {
       if (hasUnpublishedRef.current && courseRef.current) {
         try {
           const { id, draft, hasUnpublishedChanges, draftSavedAt, lastPublishedAt, ...draftFields } = courseRef.current
           localStorage.setItem(`cp_draft_${courseId}`, JSON.stringify(draftFields))
         } catch {}
+        e.preventDefault()
+        e.returnValue = 'You have unsaved changes. Are you sure you want to leave?'
+        return e.returnValue
       }
     }
     window.addEventListener('beforeunload', handleBeforeUnload)
@@ -404,9 +417,29 @@ export default function CourseEditor() {
     }
   }, [courseId])
 
+  // ── Intercept browser navigation / popstate when unpublished changes exist ─
+  useEffect(() => {
+    window.history.pushState({ cpEditor: true }, '')
+
+    const handlePopState = () => {
+      if (hasUnpublishedRef.current) {
+        // Keep URL on editor and bring up exit prompt modal
+        window.history.pushState({ cpEditor: true }, '')
+        setExitPromptOpen(true)
+      } else {
+        navigate('/admin')
+      }
+    }
+
+    window.addEventListener('popstate', handlePopState)
+    return () => {
+      window.removeEventListener('popstate', handlePopState)
+    }
+  }, [navigate])
+
   // ── Navigation handlers (Exit prompt & Post-route toast) ───────────────────
   const handleBackClick = (e) => {
-    e.preventDefault()
+    if (e) e.preventDefault()
     if (hasUnpublishedRef.current) {
       setExitPromptOpen(true)
     } else {
@@ -449,6 +482,39 @@ export default function CourseEditor() {
       }))
     } catch {}
     navigate('/admin')
+  }
+
+  const handleExitWithoutSaving = async () => {
+    setExitPromptOpen(false)
+    hasUnpublishedRef.current = false
+    setHasUnpublished(false)
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
+
+    // 1. Remove draft from localStorage
+    try {
+      localStorage.removeItem(`cp_draft_${courseId}`)
+    } catch {}
+
+    // 2. Wipe draft in Firestore so it falls back to live published data (matching Course Player)
+    try {
+      await updateCourse(courseId, {
+        draft: null,
+        hasUnpublishedChanges: false,
+      })
+    } catch (err) {
+      console.error('Failed to clear draft:', err)
+    }
+
+    // 3. Store toast message to show after reload
+    try {
+      sessionStorage.setItem('cp_post_route_toast', JSON.stringify({
+        message: 'Unsaved draft discarded. Course reset to live version (Course Player).',
+        type: 'info',
+      }))
+    } catch {}
+
+    // 4. Refresh course editor page to reload directly from live published course
+    window.location.reload()
   }
 
   // ── Keyboard shortcuts (Ctrl+Z, Ctrl+Y, Ctrl+Shift+Z, Escape) ─────────────
@@ -1638,7 +1704,17 @@ export default function CourseEditor() {
             }`}
             onClick={e => e.stopPropagation()}
           >
-            <div className="flex items-start gap-4">
+            {/* Top-right cancel button (stay in editor) */}
+            <button
+              type="button"
+              onClick={() => setExitPromptOpen(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 dark:hover:text-white p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-neutral-800 transition"
+              title="Cancel & stay in editor"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-start gap-4 pr-6">
               <div className="w-11 h-11 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
                 <AlertTriangle className="w-6 h-6" />
               </div>
@@ -1648,7 +1724,7 @@ export default function CourseEditor() {
                   You have edits saved in your draft. Students currently see the previously published version of this course.
                 </p>
                 <p className="text-xs text-slate-500 dark:text-neutral-400 mt-2">
-                  Would you like to publish these changes for students now, or keep them saved as a draft to edit later?
+                  Would you like to publish these changes for students now, keep them saved as a draft, or exit without saving (revert to live)?
                 </p>
               </div>
             </div>
@@ -1656,10 +1732,11 @@ export default function CourseEditor() {
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2.5 mt-6 pt-4 border-t border-slate-100 dark:border-neutral-800">
               <button
                 type="button"
-                onClick={() => setExitPromptOpen(false)}
-                className="order-3 sm:order-1 px-4 py-2 text-xs font-semibold rounded-lg text-slate-600 dark:text-neutral-400 hover:bg-slate-100 dark:hover:bg-neutral-800 transition text-center"
+                onClick={handleExitWithoutSaving}
+                className="order-3 sm:order-1 px-4 py-2 text-xs font-semibold rounded-lg text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 border border-red-200 dark:border-red-900/50 transition text-center"
+                title="Discard unsaved changes and reset editor to live published version"
               >
-                Stay in editor
+                Exit without saving
               </button>
               <button
                 type="button"

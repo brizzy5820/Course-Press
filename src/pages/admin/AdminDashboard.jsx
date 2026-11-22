@@ -189,8 +189,9 @@ export default function AdminDashboard() {
       {/* Desktop sidebar */}
       <aside className="hidden lg:flex fixed inset-y-0 left-0 w-64 flex-col justify-between border-r border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-4">
         <div>
-          <Link to="/admin" className="flex items-center gap-2 px-3 h-12 mb-4 text-lg font-semibold tracking-tight">
-            CoursePress <span className="text-amber-500">·</span> <span className="text-neutral-500 dark:text-neutral-400 font-medium">Admin</span>
+          <Link to="/admin" className="flex items-center gap-2.5 px-3 h-12 mb-4 text-lg font-semibold tracking-tight">
+            <img src="/icons/favicon-32x32.png" alt="" className="w-6 h-6 rounded-md object-cover" />
+            <span>CoursePress <span className="text-amber-500">·</span> <span className="text-neutral-500 dark:text-neutral-400 font-medium">Admin</span></span>
           </Link>
           {nav}
         </div>
@@ -199,7 +200,10 @@ export default function AdminDashboard() {
 
       {/* Mobile header */}
       <header className="lg:hidden sticky top-0 z-40 h-14 flex items-center justify-between px-4 border-b border-neutral-200 dark:border-neutral-800 bg-white/90 dark:bg-neutral-900/90 backdrop-blur">
-        <Link to="/admin" className="font-semibold tracking-tight">CoursePress <span className="text-amber-500">·</span> Admin</Link>
+        <Link to="/admin" className="flex items-center gap-2 font-semibold tracking-tight">
+          <img src="/icons/favicon-32x32.png" alt="" className="w-5 h-5 rounded object-cover" />
+          <span>CoursePress <span className="text-amber-500">·</span> Admin</span>
+        </Link>
         <button onClick={() => setMenuOpen(true)} className="icon-btn" aria-label="Open menu"><Menu className="h-5 w-5" /></button>
       </header>
       {menuOpen && (

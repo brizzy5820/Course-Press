@@ -4,7 +4,11 @@ import { BrowserRouter } from 'react-router-dom'
 import App from './App.jsx'
 import { AuthProvider } from './contexts/AuthContext.jsx'
 import { ThemeProvider } from './contexts/ThemeContext.jsx'
+import { registerSW } from './registerServiceWorker.js'
 import './styles/index.css'
+
+// Register PWA service worker
+registerSW()
 
 const isDev = import.meta.env.DEV
 const routerFuture = {

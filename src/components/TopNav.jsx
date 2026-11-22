@@ -57,8 +57,11 @@ export default function TopNav({ maxWidth = 'max-w-5xl', showBack = false }) {
                 <ArrowLeft className="h-4 w-4" />
               </button>
             )}
-            <Link to="/" className={`font-bold text-[17px] tracking-tight ${isDark ? 'text-white' : 'text-neutral-950'}`}>
-              CoursePress
+            <Link to="/" className="flex items-center gap-2.5">
+              <img src="/icons/favicon-32x32.png" alt="CoursePress" className="w-7 h-7 rounded-lg object-cover shadow-xs ring-1 ring-amber-500/30" />
+              <span className={`font-bold text-[17px] tracking-tight ${isDark ? 'text-white' : 'text-neutral-950'}`}>
+                CoursePress
+              </span>
             </Link>
           </div>
 

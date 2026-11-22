@@ -12,6 +12,7 @@ import YouTubeCallback from './pages/admin/YouTubeCallback'
 import { ProtectedRoute, AdminRoute } from './components/Guards'
 import { ToastProvider } from './contexts/ToastContext'
 import Preloader from './components/Preloader'
+import PWAInstallBanner from './components/PWAInstallBanner'
 
 function RoutePreloader() {
   const location = useLocation()
@@ -45,6 +46,7 @@ export default function App() {
   return (
     <ToastProvider>
       <RoutePreloader />
+      <PWAInstallBanner />
       <Routes>
         <Route path="/"                    element={<Home />} />
         <Route path="/courses/:courseId"   element={<CourseDetail />} />
