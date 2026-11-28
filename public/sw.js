@@ -50,12 +50,15 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(request.url);
 
-  // Skip Firebase Firestore, auth, and analytics API calls
+  // Skip Firebase Firestore, auth, Google APIs, and payment/media API calls
   if (
     url.hostname.includes('firestore.googleapis.com') ||
     url.hostname.includes('identitytoolkit.googleapis.com') ||
     url.hostname.includes('firebaseinstallations.googleapis.com') ||
     url.hostname.includes('accounts.google.com') ||
+    url.hostname.includes('www.googleapis.com') ||
+    url.hostname.includes('oauth2.googleapis.com') ||
+    url.hostname.includes('apis.google.com') ||
     url.hostname.includes('api.paystack.co') ||
     url.hostname.includes('api.cloudinary.com')
   ) {

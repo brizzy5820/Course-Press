@@ -6,9 +6,9 @@
     <title>CoursePress</title>
 
     <!-- PWA & Mobile Web App Meta -->
-    <meta name="theme-color" content="#c97f1e" />
+    <meta id="theme-color-meta" name="theme-color" content="#FAFAF9" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta id="apple-status-bar-meta" name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="CoursePress" />
     <meta name="description" content="Learn, watch courses, and earn certificates with CoursePress." />
 
@@ -26,7 +26,7 @@
     />
     <script src="https://js.paystack.co/v2/inline.js"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
-    <script>(function(){var t=localStorage.getItem('cp-theme');if(t==='dark'||(!t&&matchMedia('(prefers-color-scheme: dark)').matches))document.documentElement.classList.add('dark')})()</script>
+    <script>(function(){var t=localStorage.getItem('cp-theme');var isDark=t==='dark'||(!t&&matchMedia('(prefers-color-scheme: dark)').matches);if(isDark)document.documentElement.classList.add('dark');var tm=document.getElementById('theme-color-meta');if(tm)tm.setAttribute('content',isDark?'#09090B':'#FAFAF9');var am=document.getElementById('apple-status-bar-meta');if(am)am.setAttribute('content',isDark?'black-translucent':'default')})()</script>
   </head>
   <body>
     <div id="root"></div>

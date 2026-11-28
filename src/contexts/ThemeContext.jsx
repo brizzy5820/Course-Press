@@ -27,8 +27,16 @@ export function ThemeProvider({ children }) {
 
   useEffect(() => {
     const root = document.documentElement
-    root.classList.toggle('dark', theme === 'dark')
+    const isDark = theme === 'dark'
+    root.classList.toggle('dark', isDark)
     root.style.colorScheme = theme
+
+    const bgColor = isDark ? '#09090B' : '#FAFAF9'
+    const themeMeta = document.querySelector('meta[name="theme-color"]')
+    if (themeMeta) themeMeta.setAttribute('content', bgColor)
+
+    const appleMeta = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]')
+    if (appleMeta) appleMeta.setAttribute('content', isDark ? 'black-translucent' : 'default')
   }, [theme])
 
   const setMode = useCallback((m) => {

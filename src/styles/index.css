@@ -8,6 +8,14 @@ html, body, #root {
   height: 100%;
 }
 
+html {
+  background-color: #FAFAF9;
+}
+
+html.dark {
+  background-color: #09090B;
+}
+
 * {
   font-family: 'Inter', sans-serif;
 }
